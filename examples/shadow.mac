@@ -1,0 +1,9 @@
+#!mac
+[contract]
+count = "int"
+
+#!go
+// `:=` creates a NEW binding with the same name as a contract
+// variable -> shadow error during check/emit.
+count := 5
+println("count=", count)

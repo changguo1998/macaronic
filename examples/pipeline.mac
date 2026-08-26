@@ -1,0 +1,21 @@
+#!mac
+[contract]
+count = "int"
+total = "float"
+ok = "bool"
+msg = "str"
+
+#!shell
+count=3
+total=2.5
+ok=true
+msg="hello from shell"
+
+#!python
+count: int = 0
+count += 1
+msg: str = msg + " & python"
+
+#!go
+println("final values: count=", count, " total=", total, " ok=", ok,
+	" msg=", msg)

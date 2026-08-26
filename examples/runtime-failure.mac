@@ -1,0 +1,10 @@
+#!mac
+[contract]
+count = "int"
+
+#!shell
+count=3
+
+#!python
+count: int = 0
+raise RuntimeError("boom")

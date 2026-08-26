@@ -1,0 +1,7 @@
+#!mac
+[contract]
+count = "int"
+
+#!python
+# count is used but never annotated -> check error
+print("value:", count)
