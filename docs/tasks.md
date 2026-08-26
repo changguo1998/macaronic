@@ -45,82 +45,82 @@ M9 → M10
 
 ## M1 — Go module 与 CLI 骨架
 
-- [ ] T1.1 写 `go.mod`：module `github.com/changguo1998/macaronic`
+- [x] T1.1 写 `go.mod`：module `github.com/changguo1998/macaronic`
   （对齐远程仓库）、Go 1.22。
-- [ ] T1.2 写 `cmd/macaronic/main.go`：入口只分发，逻辑进
+- [x] T1.2 写 `cmd/macaronic/main.go`：入口只分发，逻辑进
   `internal/cli`。
-- [ ] T1.3 `internal/cli` 子命令 `parse|check|build|run`；未知子命令
+- [x] T1.3 `internal/cli` 子命令 `parse|check|build|run`；未知子命令
   报错、退出非零。
-- [ ] T1.4 简写：`macaronic <script>` 等价于 `run`；多余位置参数
+- [x] T1.4 简写：`macaronic <script>` 等价于 `run`；多余位置参数
   退出非零并给出用法提示。
-- [ ] T1.5 `--help` 与子命令级帮助文本，列出全部子命令。
-- [ ] T1.6 四个子命令先行 stub（显示未实现），后续 M2、M3、M4、M9
+- [x] T1.5 `--help` 与子命令级帮助文本，列出全部子命令。
+- [x] T1.6 四个子命令先行 stub（显示未实现），后续 M2、M3、M4、M9
   逐步替换。
-- [ ] T1.7 冒烟测试：子命令/简写/未知命令/多余参数的退出码断言。
+- [x] T1.7 冒烟测试：子命令/简写/未知命令/多余参数的退出码断言。
 
 ## M2 — `#!lang` 切块、TOML 契约与 IR
 
-- [ ] T2.1 `internal/ir`：`Program / Contract / Stage / VarSet` 与
+- [x] T2.1 `internal/ir`：`Program / Contract / Stage / VarSet` 与
   `BasicType` 四个类型常量；`VarSet` 为 `map[string]bool`。
-- [ ] T2.2 `internal/ir`：`SourceSpan / SourceMapEntry / SourceMap /
+- [x] T2.2 `internal/ir`：`SourceSpan / SourceMapEntry / SourceMap /
   Diagnostic` 与 `OriginKind`；`Span == nil` 表示合成行。
-- [ ] T2.3 `internal/source`：切块算法（逐行扫描 `#!` 前缀，记录
+- [x] T2.3 `internal/source`：切块算法（逐行扫描 `#!` 前缀，记录
   块开始行号，块止于下一块或 EOF，含空块与块尾无终止符的正确
   处理）。
-- [ ] T2.4 head 块规则：`#!mac` 仅一个、必须位于文件最顶部，违规
+- [x] T2.4 head 块规则：`#!mac` 仅一个、必须位于文件最顶部，违规
   报错（表驱动覆盖 head 缺失/非置顶/多 head 场景）。
-- [ ] T2.5 `internal/contract`：使用 `github.com/BurntSushi/toml`
+- [x] T2.5 `internal/contract`：使用 `github.com/BurntSushi/toml`
   解析（go.mod 固定精确版本），提取 `[contract]` 表、键→
   `BasicType` 映射。
-- [ ] T2.6 契约校验：非法变量名、重复键、值非法（golden 表驱动，
+- [x] T2.6 契约校验：非法变量名、重复键、值非法（golden 表驱动，
   非法类型/缺失类型/契约名不符命名规则全场景）。
-- [ ] T2.7 `internal/contract` 导出：`Parse(head []string)` 只输出
+- [x] T2.7 `internal/contract` 导出：`Parse(head []string)` 只输出
   `ir` 类型；键序只在打印/序列化/产物生成时排序（Go map 无稳定
   键序）。
-- [ ] T2.8 M2 集成验收：切块、契约、确定性输出回归自测脚本。
+- [x] T2.8 M2 集成验收：切块、契约、确定性输出回归自测脚本。
 
 ## M3 — 语言无关推断框架与依赖检查
 
-- [ ] T3.1 `internal/analyze`：符号表机制（名字→类型），顺序求值、
+- [x] T3.1 `internal/analyze`：符号表机制（名字→类型），顺序求值、
   后写覆盖（含架构 §6 暂停点定义）。依赖 M2。
-- [ ] T3.2 `type EngineAdapter` 骨架接口 + 语言无关读写推断公共
+- [x] T3.2 `type EngineAdapter` 骨架接口 + 语言无关读写推断公共
   实现，语言差异由引擎适配器（mock）隔开。依赖 M2。
-- [ ] T3.3 依赖校验器：`read-before-write` 报错；后写覆盖通过；
+- [x] T3.3 依赖校验器：`read-before-write` 报错；后写覆盖通过；
   多块写不冲突。错误信息输出「块号 + 变量名 + 类型」。依赖 M2。
-- [ ] T3.4 遮蔽上报钩子（语言无关）：引擎上报「新局部绑定」
+- [x] T3.4 遮蔽上报钩子（语言无关）：引擎上报「新局部绑定」
   检测结果，框架负责报错，不静默。「检测」归引擎 Analyze
   实现（见 T6.1 / T7.1 / T8.8）。依赖 T3.1。
-- [ ] T3.5 遮蔽上报的 mock 演示：引擎适配器上报、框架报错。
+- [x] T3.5 遮蔽上报的 mock 演示：引擎适配器上报、框架报错。
   依赖 T3.1。
-- [ ] T3.6 检查报告结构：错误按块号/变量/行号组织；0 错误样例
+- [x] T3.6 检查报告结构：错误按块号/变量/行号组织；0 错误样例
   演示。
-- [ ] T3.7 `check` 命令接入推断框架（打印检查报告）；Mock 引擎。
+- [x] T3.7 `check` 命令接入推断框架（打印检查报告）；Mock 引擎。
   验收：`go test ./internal/analyze/...`。依赖 M2。
 
 ## M4 — 产物目录、排他锁与 source map
 
-- [ ] T4.1 目录结构创建（`<脚本名>.run/` 下 `stageN/`、`state/`、
+- [x] T4.1 目录结构创建（`<脚本名>.run/` 下 `stageN/`、`state/`、
   `run.sh`、`sourcemap.json`）与清空函数。
-- [ ] T4.2 `internal/sourcemap`：记录接口（`AddEntry`）与查询
+- [x] T4.2 `internal/sourcemap`：记录接口（`AddEntry`）与查询
   （`Resolve(genFile, genLine)` 到源行映射），重复行不合并。
-- [ ] T4.3 跨进程排他锁（stdlib `syscall.Flock`），`Lock`/`Unlock`
+- [x] T4.3 跨进程排他锁（stdlib `syscall.Flock`），`Lock`/`Unlock`
   成对，锁文件为 `<脚本名>.run.lock` 兄弟文件。fail-fast 抢占即时报错。
-- [ ] T4.4 sourcemap.json 序列化 + 内容哈希校验实现。
-- [ ] T4.5 `build` 与 `run` 共用创建逻辑：`build` 保留 `state/`
+- [x] T4.4 sourcemap.json 序列化 + 内容哈希校验实现。
+- [x] T4.5 `build` 与 `run` 共用创建逻辑：`build` 保留 `state/`
   现有内容，`run` 清 `state/`；run.sh 生成（保序调用）。
   依赖 M2。
-- [ ] T4.6 并发锁竞态测试（`go test -race`）。
+- [x] T4.6 并发锁竞态测试（`go test -race`）。
 
 ## M5 — 构建内二进制 codec 与 codec helper
 
-- [ ] T5.1 `internal/codec`：int64/float64/bool/str 编解码、
+- [x] T5.1 `internal/codec`：int64/float64/bool/str 编解码、
   round-trip 边界值。
-- [ ] T5.2 `macaronic codec read <state-file> <type>`：按类型读
+- [x] T5.2 `macaronic codec read <state-file> <type>`：按类型读
   文件、输出文本值到 stdout。
-- [ ] T5.3 `macaronic codec write <state-file> <type> <value>`：
+- [x] T5.3 `macaronic codec write <state-file> <type> <value>`：
   按位置取值写二进制文件。
-- [ ] T5.4 CLI 错误路径（缺参数/错类型报错、退出非零）。
-- [ ] T5.5 codec 一致性、常量输出比对测试（引擎共享）。
+- [x] T5.4 CLI 错误路径（缺参数/错类型报错、退出非零）。
+- [x] T5.5 codec 一致性、常量输出比对测试（引擎共享）。
 
 ## M6 — shell engine
 
