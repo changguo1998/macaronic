@@ -167,16 +167,16 @@ M9 → M10
 
 ## M9 — build/run 驱动与错误回映
 
-- [ ] T9.1 `internal/runner` 保序调度多个 stage，失败即停、
+- [x] T9.1 `internal/runner` 保序调度多个 stage，失败即停、
   保持非零退出。
-- [ ] T9.2 退出码汇总，含普通退出码传递与失败信号。
-- [ ] T9.3 错误回映：failed stage engine 解析段 + sourcemap 映射
+- [x] T9.2 退出码汇总，含普通退出码传递与失败信号。
+- [x] T9.3 错误回映：failed stage engine 解析段 + sourcemap 映射
   行号。
-- [ ] T9.4 run 每次全量重跑（parse→check→build→清 state→执行
+- [x] T9.4 run 每次全量重跑（parse→check→build→清 state→执行
   run.sh）。
-- [ ] T9.5 failure.json 由 run.sh 写并立即退出；下次 run 开始时
+- [x] T9.5 failure.json 由 run.sh 写并立即退出；下次 run 开始时
   删除该文件，保留现场供排查。
-- [ ] T9.6 stale-source：编辑 `.mac` 后 `run` 不执行陈旧产物。
+- [x] T9.6 stale-source：编辑 `.mac` 后 `run` 不执行陈旧产物。
 
 ## M10 — 示例、异常路径、文档收尾
 

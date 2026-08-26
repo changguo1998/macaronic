@@ -38,6 +38,12 @@ func (b *Builder) Resolve(genFile string, genLine int) (ir.SourceMapEntry, bool)
 	return e, ok
 }
 
+// Raw exposes the underlying map so engines can record entries via
+// the ir.SourceMap pointer that internal/engine.Engine.Emit receives.
+func (b *Builder) Raw() *ir.SourceMap {
+	return &b.m
+}
+
 // Len reports the number of entries.
 func (b *Builder) Len() int { return len(b.m) }
 

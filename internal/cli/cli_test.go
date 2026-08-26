@@ -47,7 +47,7 @@ func TestRunSmoke(t *testing.T) {
 			name:      "shorthand equals run",
 			args:      []string{"foo.mac"},
 			wantCode:  exitFail,
-			stderrHas: "未实现",
+			stderrHas: "no such file", // run now executes; missing file -> fail
 		},
 		{
 			name:      "unknown subcommand",

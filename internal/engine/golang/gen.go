@@ -199,8 +199,10 @@ func (Engine) generate(st *ir.Stage, c ir.Contract, reads, writes ir.VarSet) []g
 	for _, h := range strings.Split(strings.TrimSuffix(codecHelpers, "\n"), "\n") {
 		gl = append(gl, syn(h))
 	}
-	gl = append(gl, syn(""), syn("func main() {"),
-		syn(`	stateDir := filepath.Join(filepath.Dir(os.Args[0]), "..", "state")`))
+	gl = append(gl, syn(""), syn("func main() {"))
+	if n := len(union(reads, writes)); n > 0 {
+		gl = append(gl, syn(`	stateDir := filepath.Join(filepath.Dir(os.Args[0]), "..", "state")`))
+	}
 
 	// deterministic declarations for reads ∪ writes
 	for _, n := range sortedNames(union(reads, writes)) {

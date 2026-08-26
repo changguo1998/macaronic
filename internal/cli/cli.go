@@ -101,6 +101,10 @@ func runSub(name string, rest []string, stdout, stderr io.Writer) int {
 	switch name {
 	case cmdCheck:
 		return runCheck(rest[0], stdout, stderr)
+	case cmdBuild:
+		return runBuildCmd(rest[0], stdout, stderr)
+	case cmdRun:
+		return runCmd(rest[0], stdout, stderr)
 	}
 	fmt.Fprintf(stderr, "%s：%s\n", name, notImplementedMsg)
 	return exitFail
