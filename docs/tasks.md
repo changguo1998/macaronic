@@ -190,3 +190,28 @@ M9 → M10
 
 > 新增依赖：`github.com/BurntSushi/toml`@精确版本。锁用 stdlib
 > `syscall.Flock`（见 T4.3），codec 自研。其他库不新增。
+
+## 执行阶段划分与并行分工
+
+| Phase | 内容 | 并行 | 落点分支 |
+| --- | --- | --- | --- |
+| A | M2 → M3 → M4 → M5 | 无（顺序） | master |
+| B | M6 shell / M7 python / M8 go | 3 worktree 并行 | 各 engine 分支 |
+| C | 三支 cherry-pick + 注册接线 + 跨语言 E2E | 无（顺序） | master |
+| D | M9 | 无 | master |
+| E | M10 | 无 | master |
+
+约定：
+
+- A 阶段冻结共享接口（`ir`、engine 接口、codec、sourcemap、目录
+  约定）；T8.3 定案：go 块生成自包含 codec 代码，与
+  `internal/codec` 交叉对照验证。
+- B 阶段每个 lane 只允许改 `internal/engine/<lang>/**`，禁止改：
+  `go.mod`、`go.sum`、`internal/cli`、共享 engine 接口/registry、
+  `docs/` 与示例文件。接口不满足时禁止自行改接口，停止并上报。
+- B 阶段每个 lane 的验收先本地通过：`gofmt -l .`、`go vet ./...`、
+  `go test ./...`、`go test -race ./...`，然后分支提交，报告 commit
+  hash 与改动文件清单。
+- C 阶段三支 cherry-pick 后，父（master）负责引擎注册、CLI 接线与
+  跨语言 E2E，跑完整质量闸门。
+- D、E 顺序执行。
