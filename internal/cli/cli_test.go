@@ -51,7 +51,7 @@ func TestRunSmoke(t *testing.T) {
 		},
 		{
 			name:      "unknown subcommand",
-			args:      []string{"codec"},
+			args:      []string{"frobnicate"},
 			wantCode:  exitUsage,
 			stderrHas: "未知子命令",
 		},

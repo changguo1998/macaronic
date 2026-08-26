@@ -23,6 +23,7 @@ const (
 	cmdCheck = "check"
 	cmdBuild = "build"
 	cmdRun   = "run"
+	cmdCodec = "codec"
 )
 
 // exit codes.
@@ -72,6 +73,8 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	switch name {
 	case cmdParse, cmdCheck, cmdBuild, cmdRun:
 		return runSub(name, args[1:], stdout, stderr)
+	case cmdCodec:
+		return runCodec(args[1:], stdout, stderr)
 	}
 
 	if !looksLikeScript(name) {
