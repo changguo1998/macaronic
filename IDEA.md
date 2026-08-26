@@ -19,10 +19,8 @@
    用户不用手工导出文件、写胶水代码。
 1. **顺序流水线**：代码块即阶段（stage），天然构成流水线。
 
-## 待确定（占位）
+## 已确定（详见 docs/discussion-2026-08-25-architecture.md）
 
-- 脚本中如何标注每段代码的语言（Markdown 块 / 注释指令 / 自定义 DSL）
-- 跨语言衔接的数据格式（stdout→stdin 管道 / 共享 JSON state / 两者都要）
-- 工具本身用什么语言实现（Python / Go / Node）
-
-以上问题确认后再细化设计。
+- 块标记：`#!lang`（如 `#!python`、`#!go`；`#!mac` head 块声明跨块变量契约）
+- 跨语言衔接：每变量一个文件（脚本同目录 `<脚本名>.run/state/<var>`，二进制，脚本内自洽）
+- 实现语言：Go（首批块语言：shell + python + go）
