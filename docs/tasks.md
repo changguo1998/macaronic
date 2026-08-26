@@ -180,11 +180,11 @@ M9 → M10
 
 ## M10 — 示例、异常路径、文档收尾
 
-- [ ] T10.1 `examples/`：shell→python→go 完整示例（含 `README`）。
-- [ ] T10.2 异常路径用例：读未写、类型冲突、遮蔽、块失败。
-- [ ] T10.3 `README.md`：安装、用法、示例；文档与 architecture.md、
+- [x] T10.1 `examples/`：shell→python→go 完整示例（含 `README`）。
+- [x] T10.2 异常路径用例：读未写、类型冲突、遮蔽、块失败。
+- [x] T10.3 `README.md`：安装、用法、示例；文档与 architecture.md、
   IDEA.md 一致。
-- [ ] T10.4 `go test ./...` 全绿 + `git diff --check` 干净。
+- [x] T10.4 `go test ./...` 全绿 + `git diff --check` 干净。
 
 ## 依赖约束
 
