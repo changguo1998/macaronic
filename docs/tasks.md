@@ -124,45 +124,45 @@ M9 → M10
 
 ## M6 — shell engine
 
-- [ ] T6.1 `Analyze`：推断 shell 读（`$name` / `${name}`）、写
+- [x] T6.1 `Analyze`：推断 shell 读（`$name` / `${name}`）、写
   （`name=...`）；转换由契约表类型驱动。
-- [ ] T6.2 `Emit`：注入 prologue/epilogue 读写，调用 codec helper，
+- [x] T6.2 `Emit`：注入 prologue/epilogue 读写，调用 codec helper，
   不依赖纯 Bash 解析 NUL。依赖 M3、M4、M5。
-- [ ] T6.3 `RunCommand`（`bash <genfile>`）+
+- [x] T6.3 `RunCommand`（`bash <genfile>`）+
   `ParseDiagnostics`（`script.sh: line N: ...` 诊断）。依赖 M3、M4、M5。
-- [ ] T6.4 shell 转换函数（str/int/float/bool ↔ codec helper）。
-- [ ] T6.5 shell 引擎整体 E2E：shell→shell 变量传递
+- [x] T6.4 shell 转换函数（str/int/float/bool ↔ codec helper）。
+- [x] T6.5 shell 引擎整体 E2E：shell→shell 变量传递
   （str/int/float/bool）。
-- [ ] T6.6 sourcemap 条目生成与抽查（重复行、`OriginSynthetic`）。
+- [x] T6.6 sourcemap 条目生成与抽查（重复行、`OriginSynthetic`）。
 
 ## M7 — python engine
 
-- [ ] T7.1 `Analyze`：Python 块契约变量必须带类型注解（`x: int`），
+- [x] T7.1 `Analyze`：Python 块契约变量必须带类型注解（`x: int`），
   缺注解报错。依赖 M3、M4、M5。
-- [ ] T7.2 「契约变量必注解」错误场景回归测试（错误文本+行）。
-- [ ] T7.3 `Emit`：prologue（读文件赋变量）+ epilogue（写回文件），
+- [x] T7.2 「契约变量必注解」错误场景回归测试（错误文本+行）。
+- [x] T7.3 `Emit`：prologue（读文件赋变量）+ epilogue（写回文件），
   按契约类型转换。
-- [ ] T7.4 `RunCommand`（`python3 <genfile>`）+ `ParseDiagnostics`
+- [x] T7.4 `RunCommand`（`python3 <genfile>`）+ `ParseDiagnostics`
   解析 Python traceback（生成文件、行号、消息）。
-- [ ] T7.5 python→python E2E 与 shell→python 传递类型一致性测试。
-- [ ] T7.6 sourcemap 条目生成与抽查。
-- [ ] T7.7 python 引擎整体 E2E（读入前块变量、写出、必注解
+- [x] T7.5 python→python E2E 与 shell→python 传递类型一致性测试。
+- [x] T7.6 sourcemap 条目生成与抽查。
+- [x] T7.7 python 引擎整体 E2E（读入前块变量、写出、必注解
   check 报错全链路）。
 
 ## M8 — go engine
 
-- [ ] T8.1 `internal/engine/golang`：`func main` 包裹用户代码；import 形态按 T8.3。
+- [x] T8.1 `internal/engine/golang`：`func main` 包裹用户代码；import 形态按 T8.3。
   依赖 T8.3。用户 import 暂不支持。
-- [ ] T8.2 契约变量 Go 类型声明 + prologue/epilogue Go 生成。依赖 T8.3。
-- [ ] T8.3 codec 访问定案：生成 stage 无法 import `internal/codec`
+- [x] T8.2 契约变量 Go 类型声明 + prologue/epilogue Go 生成。依赖 T8.3。
+- [x] T8.3 codec 访问定案：生成 stage 无法 import `internal/codec`
   （internal 包规则）——定案为注入自包含 codec 代码或建立公共
   runtime 包。
-- [ ] T8.4 `go build` 编译错误捕获；`RunCommand` 执行生成的
+- [x] T8.4 `go build` 编译错误捕获；`RunCommand` 执行生成的
   二进制（非 `go run`）。
-- [ ] T8.5 `ParseDiagnostics`（go 编译错误 + 运行时栈两模式）。
-- [ ] T8.6 sourcemap 条目生成与抽查。
-- [ ] T8.7 go E2E：读入前块变量、写出、报错行回映。
-- [ ] T8.8 `Analyze`：推断 go 块读写（契约变量声明/引用；`:=`
+- [x] T8.5 `ParseDiagnostics`（go 编译错误 + 运行时栈两模式）。
+- [x] T8.6 sourcemap 条目生成与抽查。
+- [x] T8.7 go E2E：读入前块变量、写出、报错行回映。
+- [x] T8.8 `Analyze`：推断 go 块读写（契约变量声明/引用；`:=`
   新绑定即遮蔽报错）。
 
 ## M9 — build/run 驱动与错误回映
