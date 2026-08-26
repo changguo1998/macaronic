@@ -7,6 +7,14 @@ package cli
 import (
 	"fmt"
 	"io"
+	"os"
+	"strings"
+
+	"github.com/changguo1998/macaronic/internal/analyze"
+	"github.com/changguo1998/macaronic/internal/contract"
+	"github.com/changguo1998/macaronic/internal/engine"
+	"github.com/changguo1998/macaronic/internal/ir"
+	"github.com/changguo1998/macaronic/internal/source"
 )
 
 // subcommand names registered in M1.
@@ -75,7 +83,7 @@ func Run(args []string, stdout, stderr io.Writer) int {
 }
 
 // runSub validates positional args, handles -h/--help and forwards to
-// the (currently stubbed) subcommand driver.
+// the subcommand driver.
 func runSub(name string, rest []string, stdout, stderr io.Writer) int {
 	for _, r := range rest {
 		if r == "-h" || r == "--help" {
@@ -87,7 +95,40 @@ func runSub(name string, rest []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "macaronic：%s 恰需 1 个脚本参数，得到 %d 个\n", name, len(rest))
 		return exitUsage
 	}
+	switch name {
+	case cmdCheck:
+		return runCheck(rest[0], stdout, stderr)
+	}
 	fmt.Fprintf(stderr, "%s：%s\n", name, notImplementedMsg)
+	return exitFail
+}
+
+// runCheck slices, parses and runs the analysis framework over one
+// script, printing the report. A non-zero exit reflects found issues.
+func runCheck(path string, stdout, stderr io.Writer) int {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		fmt.Fprintf(stderr, "macaronic check: %v\n", err)
+		return exitFail
+	}
+	lines := strings.Split(strings.TrimSuffix(string(data), "\n"), "\n")
+	head, stages, err := source.Split(path, lines)
+	if err != nil {
+		fmt.Fprintf(stderr, "macaronic check: %v\n", err)
+		return exitFail
+	}
+	c, err := contract.Parse(head)
+	if err != nil {
+		fmt.Fprintf(stderr, "macaronic check: %v\n", err)
+		return exitFail
+	}
+	rep := (analyze.Analyzer{Engines: engine.Get}).Run(&ir.Program{
+		Path: path, Contract: c, Stages: stages,
+	})
+	rep.Print(stdout)
+	if rep.OK() {
+		return exitOK
+	}
 	return exitFail
 }
 
