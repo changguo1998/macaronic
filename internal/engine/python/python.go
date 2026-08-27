@@ -43,9 +43,10 @@ func assignRe(name string) *regexp.Regexp {
 
 // bareAssignRe matches a non-annotated assignment or augmented
 // assignment "name = ..." / "name += ..." / "name -= ..." etc.
+// Plain "=" is included but "==" is excluded (character class).
 func bareAssignRe(name string) *regexp.Regexp {
 	return regexp.MustCompile(`^\s*` + regexp.QuoteMeta(name) +
-		`\s*(?:\+=|-=|\*=|/=|//=|%=|&=|\|=|\^=|<<=|>>=)`)
+		`\s*(?:\+=|-=|\*=|/=|//=|%=|&=|\|=|\^=|<<=|>>=|=)[^=]`)
 }
 
 // Analyze scans the block for contract-variable usage. Each contract

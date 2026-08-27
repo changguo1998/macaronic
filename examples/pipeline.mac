@@ -6,16 +6,14 @@ ok = "bool"
 msg = "str"
 
 #!shell
-count=3
+count=40
 total=2.5
 ok=true
 msg="hello from shell"
 
 #!python
-count: int = 0
-count += 1
+count: int = count + 1
 msg: str = msg + " & python"
 
 #!go
-println("final values: count=", count, " total=", total, " ok=", ok,
-	" msg=", msg)
+fmt.Printf("final values: count=%d total=%g ok=%t msg=%s\n", count, total, ok, msg)

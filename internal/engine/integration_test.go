@@ -38,43 +38,50 @@ func TestCrossEngineFlow(t *testing.T) {
 	}
 	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
-	// stage 1: shell writes count=3 total=2.5 ok true msg
+	// stage 1: shell writes count=40 total=2.5 ok msg
 	st1 := &ir.Stage{Index: 1, Lang: "shell", StartLine: 1, Body: []string{
-		`count=3`,
+		`count=40`,
 		`total=2.5`,
 		`ok=true`,
 		`msg="hello from shell"`,
 	}}
 	runStage(t, shell.Engine{}, st1, root, contract, "1")
 
-	// stage 2: python augments count and msg; total/ok passed through
+	// stage 2: python reads count and msg (self-referencing
+	// annotations), writes them back; total/ok read too.
 	st2 := &ir.Stage{Index: 2, Lang: "python", StartLine: 6, Body: []string{
-		"count: int = 0",
-		"count += 1",
+		"count: int = count + 1",
 		"msg: str = msg + \" & python\"",
 	}}
 	runStage(t, python.Engine{}, st2, root, contract, "2")
 
 	// stage 3: go reads everything (no writes) and prints
 	st3 := &ir.Stage{Index: 3, Lang: "go", StartLine: 12, Body: []string{
-		`fmt.Println("final values: count=", count, " total=", total,
-			" ok=", ok, " msg=", msg)`,
+		`fmt.Printf("final values: count=%d total=%g ok=%t msg=%s\n",
+			count, total, ok, msg)`,
 	}}
 	out := runStage(t, golang.Engine{}, st3, root, contract, "3")
 
-	// asserted final values (see examples/pipeline.mac)
-	if !bytes.Contains([]byte(out), []byte("final values: count= 1")) ||
-		!bytes.Contains([]byte(out), []byte("hello from shell & python")) {
-		t.Errorf("final output = %q", out)
+	// asserted exact final output (matches examples/pipeline.mac)
+	want := "final values: count=41 total=2.5 ok=true msg=hello from shell & python\n"
+	if out != want {
+		t.Errorf("final output = %q, want %q", out, want)
 	}
 
-	// state files follow the shared contract <name>.mac<type>
-	for _, f := range []string{
-		"count.macint", "total.macfloat", "ok.macbool", "msg.macstr",
-	} {
+	// state files follow the shared contract <name>.mac<type>;
+	// legacy bare names must not exist.
+	stored := map[string]struct{}{
+		"count.macint": {}, "total.macfloat": {}, "ok.macbool": {}, "msg.macstr": {},
+	}
+	for f := range stored {
 		fi, err := os.Stat(filepath.Join(stateDir, f))
 		if err != nil || fi.Size() == 0 {
 			t.Errorf("missing/empty state file %s: %v", f, err)
+		}
+	}
+	for _, bare := range []string{"count", "total", "ok", "msg"} {
+		if _, err := os.Stat(filepath.Join(stateDir, bare)); err == nil {
+			t.Errorf("legacy bare state file exists: state/%s", bare)
 		}
 	}
 	cnt, err := os.ReadFile(filepath.Join(stateDir, "count.macint"))
@@ -82,8 +89,8 @@ func TestCrossEngineFlow(t *testing.T) {
 		t.Fatal(err)
 	}
 	v, err := codec.Read(bytes.NewReader(cnt), ir.Int)
-	if err != nil || v.(int64) != 1 {
-		t.Errorf("count state = %v (%v), want 1", v, err)
+	if err != nil || v.(int64) != 41 {
+		t.Errorf("count state = %v (%v), want 41", v, err)
 	}
 	msg, _ := os.ReadFile(filepath.Join(stateDir, "msg.macstr"))
 	m, err := codec.Read(bytes.NewReader(msg), ir.Str)

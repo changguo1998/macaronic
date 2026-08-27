@@ -1,1 +1,3 @@
 .pi-glla/
+*.mac.run.lock
+*.mac.run/

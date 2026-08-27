@@ -21,7 +21,7 @@ macaronic run pipeline.mac
 
 ```text
 pipeline.mac: running 3 stage(s)
-final values: count= 1 total= +2.500000e+000 ok=true msg=hello from shell & python
+final values: count=41 total=2.5 ok=true msg=hello from shell & python
 pipeline.mac: ok
 ```
 
