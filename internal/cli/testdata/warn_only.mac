@@ -1,0 +1,7 @@
+#!mac
+[contract]
+count = "int"
+total = "int"
+
+#!shell
+count=42
