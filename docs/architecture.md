@@ -337,10 +337,9 @@ macaronic <script>   # 等价于 macaronic run <script>
   - 一维 homogeneous list（`int[]` / `float[]` / `bool[]` / `str[]`）：
     4 字节 little-endian 元素数量 + 每个元素的对应标量编码；元素数量
     有上限，禁止嵌套列表。
-    契约解析接受 `string[]` 作为兼容拼写，并规范化为 canonical `str[]`。
 - **state 文件名契约**：`<var>.mac<type>`（如 `count.macint`、
   `msg.macstr`、`values.macint[]`）。**所有引擎统一**此命名，保证跨语言
-  state 互通。类型后缀 = canonical 契约类型名。
+  state 互通。类型后缀 = 契约类型名。
 - **codec helper**：shell 块的注入读写不直接解析二进制，而调用
   macaronic 的隐藏子命令 `codec`：
   - `macaronic codec read <state-file> <type>` → 输出人类可读值

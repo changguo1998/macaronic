@@ -44,9 +44,8 @@
 ## M16 — 基础类型一维数组跨块传递
 
 - **交付物**：
-  - 契约支持 `int[]`、`float[]`、`bool[]`、`str[]` 四种一维 homogeneous
-    list；`string[]` 仅作为兼容别名规范化为 `str[]`；拒绝嵌套、对象、联合、
-    nullable 和混合元素。
+  - 契约支持 `int[]`、`float[]`、`bool[]`、`string[]` 四种一维 homogeneous
+    list；拒绝嵌套列表、对象、联合类型、nullable 和混合元素。
   - 保持四种标量 wire format 不变；数组格式为 little-endian `uint32`
     元素数量，后接逐元素标量编码；解码前限制元素数量，避免无界分配。
   - codec 显式支持 `[]int64`、`[]float64`、`[]bool`、`[]string`，不以

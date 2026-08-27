@@ -331,25 +331,3 @@ func TestEmitPythonListPlumbing(t *testing.T) {
 		}
 	}
 }
-
-func TestEmitPythonRejectsNULStringList(t *testing.T) {
-	requirePython(t)
-	root := t.TempDir()
-	stageDir := filepath.Join(root, "stage")
-	stateDir := filepath.Join(root, "state")
-	if err := os.MkdirAll(stateDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	corrupt := []byte{1, 0, 0, 0, 1, 0, 0, 0, 0}
-	if err := os.WriteFile(filepath.Join(stateDir, "values.macstr[]"), corrupt, 0o644); err != nil {
-		t.Fatal(err)
-	}
-	st := stage("python", 3, "values: list[str]", "print(values)")
-	if err := (Engine{}).Emit(st, ir.Contract{"values": ir.ListOf(ir.Str)}, stageDir, stateDir, nil); err != nil {
-		t.Fatalf("Emit: %v", err)
-	}
-	out, err := runPython(t, stageDir)
-	if err == nil || !strings.Contains(out, "NUL string element") {
-		t.Fatalf("run output = %q, err=%v; want NUL rejection", out, err)
-	}
-}

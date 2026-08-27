@@ -49,8 +49,7 @@
 ## M16 — 基础类型一维数组跨块传递
 
 - [x] T16.1 扩展 contract/type 表示，支持且仅支持 `int[]`、`float[]`、
-  `bool[]`、`str[]`；`string[]` 作为兼容别名规范化为 `str[]`；拒绝嵌套、
-  对象、联合、nullable 和混合类型。
+  `bool[]`、`string[]`；拒绝嵌套、对象、联合、nullable 和混合类型。
 - [x] T16.2 定义数组 wire format：little-endian `uint32` 数量 + 标量元素；
   标量格式字节级兼容；解码前限制数量并拒绝损坏数据。
 - [x] T16.3 codec 显式支持 `[]int64`、`[]float64`、`[]bool`、`[]string`，
