@@ -82,3 +82,34 @@ func TestCodecRoundTripAllTypes(t *testing.T) {
 		}
 	}
 }
+
+func TestCodecListBridge(t *testing.T) {
+	dir := t.TempDir()
+	state := filepath.Join(dir, "values.macint[]")
+	var out, err strings.Builder
+	if code := Run([]string{"codec", "write-list", state, "int[]", "1", "-2", "9"}, &out, &err); code != exitOK {
+		t.Fatalf("write-list: code %d stderr=%s", code, err.String())
+	}
+	out.Reset()
+	err.Reset()
+	if code := Run([]string{"codec", "read-list", state, "int[]"}, &out, &err); code != exitOK {
+		t.Fatalf("read-list: code %d stderr=%s", code, err.String())
+	}
+	if out.String() != "1\x00-2\x009\x00" {
+		t.Errorf("read-list output = %q", out.String())
+	}
+
+	state = filepath.Join(dir, "words.macstr[]")
+	out.Reset()
+	err.Reset()
+	if code := Run([]string{"codec", "write-list", state, "str[]", "hello world", "line\nbreak"}, &out, &err); code != exitOK {
+		t.Fatalf("write-list strings: code %d stderr=%s", code, err.String())
+	}
+	out.Reset()
+	if code := Run([]string{"codec", "read-list", state, "str[]"}, &out, &err); code != exitOK {
+		t.Fatalf("read-list strings: code %d stderr=%s", code, err.String())
+	}
+	if out.String() != "hello world\x00line\nbreak\x00" {
+		t.Errorf("read-list strings = %q", out.String())
+	}
+}

@@ -121,6 +121,116 @@ func mWriteStr(path string, s string) error {
     copy(b[4:], s)
     return mWriteFile(path, b)
 }
+func mReadListData(path string) ([]byte, uint32, error) {
+    b, err := mReadFile(path)
+    if err != nil {
+        return nil, 0, err
+    }
+    if len(b) < 4 {
+        return nil, 0, fmt.Errorf("state %s: missing list length", path)
+    }
+    n := mLeUint32(b)
+    if n > 1048576 {
+        return nil, 0, fmt.Errorf("state %s: list length %d exceeds limit", path, n)
+    }
+    return b[4:], n, nil
+}
+func mWriteListData(path string, b []byte) error { return mWriteFile(path, b) }
+func mReadInt64List(path string) ([]int64, error) {
+    b, n, err := mReadListData(path)
+    if err != nil { return nil, err }
+    out := make([]int64, n)
+    for i := range out {
+        if len(b) < 8 { return nil, fmt.Errorf("state %s: truncated int list", path) }
+        out[i] = int64(mLeUint64(b))
+        b = b[8:]
+    }
+    return out, nil
+}
+func mReadFloat64List(path string) ([]float64, error) {
+    b, n, err := mReadListData(path)
+    if err != nil { return nil, err }
+    out := make([]float64, n)
+    for i := range out {
+        if len(b) < 8 { return nil, fmt.Errorf("state %s: truncated float list", path) }
+        out[i] = math.Float64frombits(mLeUint64(b))
+        b = b[8:]
+    }
+    return out, nil
+}
+func mReadBoolList(path string) ([]bool, error) {
+    b, n, err := mReadListData(path)
+    if err != nil { return nil, err }
+    out := make([]bool, n)
+    for i := range out {
+        if len(b) < 1 { return nil, fmt.Errorf("state %s: truncated bool list", path) }
+        out[i] = b[0] != 0
+        b = b[1:]
+    }
+    return out, nil
+}
+func mReadStrList(path string) ([]string, error) {
+    b, n, err := mReadListData(path)
+    if err != nil { return nil, err }
+    out := make([]string, n)
+    for i := range out {
+        if len(b) < 4 { return nil, fmt.Errorf("state %s: truncated string list", path) }
+        size := int(mLeUint32(b))
+        b = b[4:]
+        if size < 0 || size > len(b) { return nil, fmt.Errorf("state %s: bad string length", path) }
+        out[i] = string(b[:size])
+        if mHasNul(out[i]) { return nil, fmt.Errorf("state %s: NUL string element", path) }
+        b = b[size:]
+    }
+    return out, nil
+}
+func mWriteInt64List(path string, v []int64) error {
+    if len(v) > 1048576 { return fmt.Errorf("list too long") }
+    b := make([]byte, 4, 4+8*len(v))
+    mPutUint32(b, uint32(len(v)))
+    for _, x := range v {
+        var item [8]byte
+        mPutUint64(item[:], uint64(x))
+        b = append(b, item[:]...)
+    }
+    return mWriteListData(path, b)
+}
+func mWriteFloat64List(path string, v []float64) error {
+    if len(v) > 1048576 { return fmt.Errorf("list too long") }
+    b := make([]byte, 4, 4+8*len(v))
+    mPutUint32(b, uint32(len(v)))
+    for _, x := range v {
+        var item [8]byte
+        mPutUint64(item[:], math.Float64bits(x))
+        b = append(b, item[:]...)
+    }
+    return mWriteListData(path, b)
+}
+func mWriteBoolList(path string, v []bool) error {
+    if len(v) > 1048576 { return fmt.Errorf("list too long") }
+    b := make([]byte, 4, 4+len(v))
+    mPutUint32(b, uint32(len(v)))
+    for _, x := range v { if x { b = append(b, 1) } else { b = append(b, 0) } }
+    return mWriteListData(path, b)
+}
+func mWriteStrList(path string, v []string) error {
+    if len(v) > 1048576 { return fmt.Errorf("list too long") }
+    b := make([]byte, 4)
+    mPutUint32(b, uint32(len(v)))
+    for _, x := range v {
+        if mHasNul(x) { return fmt.Errorf("string list element contains NUL") }
+        if len(x) > 0xffffffff { return fmt.Errorf("string too long") }
+        var size [4]byte
+        mPutUint32(size[:], uint32(len(x)))
+        b = append(b, size[:]...)
+        b = append(b, x...)
+    }
+    return mWriteListData(path, b)
+}
+func mHasNul(s string) bool {
+    for i := 0; i < len(s); i++ { if s[i] == 0 { return true } }
+    return false
+}
 func mFail(err error) {
     fmt.Fprintln(os.Stderr, err)
     os.Exit(1)
@@ -272,6 +382,18 @@ func readHelper(t ir.BasicType) string {
 	case ir.Str:
 		return "mReadStr"
 	}
+	if elem, ok := ir.ElementType(t); ok {
+		switch elem {
+		case ir.Int:
+			return "mReadInt64List"
+		case ir.Float:
+			return "mReadFloat64List"
+		case ir.Bool:
+			return "mReadBoolList"
+		case ir.Str:
+			return "mReadStrList"
+		}
+	}
 	return "mReadStr"
 }
 
@@ -287,6 +409,18 @@ func writeHelper(t ir.BasicType) string {
 	case ir.Str:
 		return "mWriteStr"
 	}
+	if elem, ok := ir.ElementType(t); ok {
+		switch elem {
+		case ir.Int:
+			return "mWriteInt64List"
+		case ir.Float:
+			return "mWriteFloat64List"
+		case ir.Bool:
+			return "mWriteBoolList"
+		case ir.Str:
+			return "mWriteStrList"
+		}
+	}
 	return "mWriteStr"
 }
 
@@ -301,6 +435,9 @@ func goType(t ir.BasicType) string {
 		return "bool"
 	case ir.Str:
 		return "string"
+	}
+	if elem, ok := ir.ElementType(t); ok {
+		return "[]" + goType(elem)
 	}
 	return "string"
 }

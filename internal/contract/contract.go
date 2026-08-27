@@ -18,10 +18,16 @@ var nameRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 // typeNames maps contract string values to ir types.
 var typeNames = map[string]ir.BasicType{
-	"int":   ir.Int,
-	"float": ir.Float,
-	"bool":  ir.Bool,
-	"str":   ir.Str,
+	"int":     ir.Int,
+	"float":   ir.Float,
+	"bool":    ir.Bool,
+	"str":     ir.Str,
+	"int[]":   ir.ListOf(ir.Int),
+	"float[]": ir.ListOf(ir.Float),
+	"bool[]":  ir.ListOf(ir.Bool),
+	"str[]":   ir.ListOf(ir.Str),
+	// Accept the conventional spelling while keeping str[] canonical.
+	"string[]": ir.ListOf(ir.Str),
 }
 
 // doc is the raw TOML shape accepted from the head block.

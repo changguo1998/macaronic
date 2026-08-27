@@ -334,3 +334,20 @@ func TestEmitShellM13ArithmeticReference(t *testing.T) {
 		t.Errorf("arithmetic update should emit read+write plumbing:\n%s", out)
 	}
 }
+
+func TestEmitShellListPlumbing(t *testing.T) {
+	stageDir := t.TempDir()
+	st := testStage(`values=("${values[@]}" 3)`)
+	c := ir.Contract{"values": ir.ListOf(ir.Int)}
+	if err := (Engine{}).Emit(st, c, stageDir, t.TempDir(), nil); err != nil {
+		t.Fatalf("Emit: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(stageDir, genFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := string(data)
+	if !strings.Contains(out, "codec read-list") || !strings.Contains(out, "codec write-list") {
+		t.Errorf("generated shell missing list bridge:\n%s", out)
+	}
+}

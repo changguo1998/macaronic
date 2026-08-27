@@ -10,8 +10,8 @@
 | --- | --- | --- |
 | M14 | 4–6 工时 | 6 / 6 |
 | M15 | 4–6 工时 | 6 / 6 |
-| M16 | 10–16 工时 | 0 / 9 |
-| **M14–M16** | **约 18–28 工时** | **12 / 21** |
+| M16 | 10–16 工时 | 9 / 9 |
+| **M14–M16** | **约 18–28 工时** | **21 / 21** |
 
 ## M14 — 静态诊断回映到原始源码
 
@@ -48,20 +48,20 @@
 
 ## M16 — 基础类型一维数组跨块传递
 
-- [ ] T16.1 扩展 contract/type 表示，支持且仅支持 `int[]`、`float[]`、
+- [x] T16.1 扩展 contract/type 表示，支持且仅支持 `int[]`、`float[]`、
   `bool[]`、`string[]`；拒绝嵌套、对象、联合、nullable 和混合类型。
-- [ ] T16.2 定义数组 wire format：little-endian `uint32` 数量 + 标量元素；
+- [x] T16.2 定义数组 wire format：little-endian `uint32` 数量 + 标量元素；
   标量格式字节级兼容；解码前限制数量并拒绝损坏数据。
-- [ ] T16.3 codec 显式支持 `[]int64`、`[]float64`、`[]bool`、`[]string`，
+- [x] T16.3 codec 显式支持 `[]int64`、`[]float64`、`[]bool`、`[]string`，
   拒绝嵌入 NUL；不引入 reflection 或 `[]any` 公共路径。
-- [ ] T16.4 增加四种数组的 round-trip、边界、损坏数据和超大数量测试。
-- [ ] T16.5 生成 Go 数组读写 plumbing，并添加 prologue/epilogue 产物断言。
-- [ ] T16.6 生成 Python 数组读写 plumbing，并添加 prologue/epilogue 产物断言。
-- [ ] T16.7 生成 Shell 数组读写 plumbing，使用 binary-safe bridge，并添加
+- [x] T16.4 增加四种数组的 round-trip、边界、损坏数据和超大数量测试。
+- [x] T16.5 生成 Go 数组读写 plumbing，并添加 prologue/epilogue 产物断言。
+- [x] T16.6 生成 Python 数组读写 plumbing，并添加 prologue/epilogue 产物断言。
+- [x] T16.7 生成 Shell 数组读写 plumbing，使用 binary-safe bridge，并添加
   产物断言。
-- [ ] T16.8 增加 shell→python→go 跨引擎 E2E，验证写入、读取/修改、再写入
+- [x] T16.8 增加 shell→python→go 跨引擎 E2E，验证写入、读取/修改、再写入
   及最终 codec 值；标量 E2E 无回归。
-- [ ] T16.9 运行 M16 固定质量闸门并创建独立提交。
+- [x] T16.9 运行 M16 固定质量闸门并创建独立提交。
   验收：gofmt、vet、test、race、diff-check、markdownlint 全部通过。
 
 ## 依赖约束

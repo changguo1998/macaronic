@@ -313,3 +313,21 @@ func TestEmitPythonM13DefParamShadow(t *testing.T) {
 		t.Fatalf("Emit error = %v, want parameter-shadow diagnostic", err)
 	}
 }
+
+func TestEmitPythonListPlumbing(t *testing.T) {
+	stageDir := t.TempDir()
+	st := stage("python", 3, "values: list[int]", "values[0] += 1")
+	if err := (Engine{}).Emit(st, ir.Contract{"values": ir.ListOf(ir.Int)}, stageDir, t.TempDir(), nil); err != nil {
+		t.Fatalf("Emit: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(stageDir, genFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := string(data)
+	for _, want := range []string{"values = _mac_read", "typ.endswith('[]')", "_mac_write"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("generated Python missing %q:\n%s", want, out)
+		}
+	}
+}

@@ -2,7 +2,7 @@
 // compile pipeline stages.
 package ir
 
-// BasicType enumerates primitive cross-block types.
+// BasicType names a scalar or one-dimensional homogeneous cross-block type.
 type BasicType string
 
 const (
@@ -11,6 +11,36 @@ const (
 	Bool  BasicType = "bool"
 	Str   BasicType = "str"
 )
+
+// ListOf returns the canonical one-dimensional list type for a scalar type.
+func ListOf(t BasicType) BasicType {
+	if _, ok := ElementType(t); ok {
+		return ""
+	}
+	return t + "[]"
+}
+
+// ElementType returns the scalar element type for a supported list type.
+func ElementType(t BasicType) (BasicType, bool) {
+	switch t {
+	case BasicType("int[]"):
+		return Int, true
+	case BasicType("float[]"):
+		return Float, true
+	case BasicType("bool[]"):
+		return Bool, true
+	case BasicType("str[]"), BasicType("string[]"):
+		return Str, true
+	default:
+		return "", false
+	}
+}
+
+// IsList reports whether t is a supported one-dimensional list type.
+func IsList(t BasicType) bool {
+	_, ok := ElementType(t)
+	return ok
+}
 
 // Contract maps cross-block variable names to their type. Order of
 // iteration over map is undefined; deterministic outputs must sort

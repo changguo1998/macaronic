@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"strings"
 
 	"github.com/changguo1998/macaronic/internal/ir"
 )
@@ -25,6 +26,8 @@ const (
 	boolSize   = 1
 	strLenSize = 4
 )
+
+const maxListElements = 1 << 20
 
 // WriteInt writes v as 8-byte LE.
 func WriteInt(w io.Writer, v int64) error {
@@ -110,9 +113,130 @@ func ReadStr(r io.Reader) (string, error) {
 	return string(buf), nil
 }
 
+// WriteList writes a one-dimensional typed slice as count + scalar elements.
+func WriteList(w io.Writer, t ir.BasicType, v any) error {
+	elem, ok := ir.ElementType(t)
+	if !ok {
+		return fmt.Errorf("codec: unknown list type %q", t)
+	}
+	var n int
+	item := func(int) any { return nil }
+	switch x := v.(type) {
+	case []int64:
+		if elem != ir.Int {
+			return fmt.Errorf("codec %s: got []int64", t)
+		}
+		n, item = len(x), func(i int) any { return x[i] }
+	case []float64:
+		if elem != ir.Float {
+			return fmt.Errorf("codec %s: got []float64", t)
+		}
+		n, item = len(x), func(i int) any { return x[i] }
+	case []bool:
+		if elem != ir.Bool {
+			return fmt.Errorf("codec %s: got []bool", t)
+		}
+		n, item = len(x), func(i int) any { return x[i] }
+	case []string:
+		if elem != ir.Str {
+			return fmt.Errorf("codec %s: got []string", t)
+		}
+		n, item = len(x), func(i int) any { return x[i] }
+	default:
+		return fmt.Errorf("codec %s: got %T, want typed slice", t, v)
+	}
+	if n > math.MaxUint32 || n > maxListElements {
+		return fmt.Errorf("codec list too long (length %d)", n)
+	}
+	if elem == ir.Str {
+		for i := 0; i < n; i++ {
+			if strings.IndexByte(item(i).(string), 0) >= 0 {
+				return fmt.Errorf("codec %s: string element contains NUL", t)
+			}
+		}
+	}
+	var lb [4]byte
+	binary.LittleEndian.PutUint32(lb[:], uint32(n))
+	if _, err := w.Write(lb[:]); err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		if err := Write(w, elem, item(i)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// ReadList reads and bounds-checks a one-dimensional typed slice.
+func ReadList(r io.Reader, t ir.BasicType) (any, error) {
+	elem, ok := ir.ElementType(t)
+	if !ok {
+		return nil, fmt.Errorf("codec: unknown list type %q", t)
+	}
+	var lb [4]byte
+	if _, err := io.ReadFull(r, lb[:]); err != nil {
+		return nil, err
+	}
+	n := binary.LittleEndian.Uint32(lb[:])
+	if n > maxListElements {
+		return nil, fmt.Errorf("codec list length %d exceeds limit %d", n, maxListElements)
+	}
+	switch elem {
+	case ir.Int:
+		out := make([]int64, n)
+		for i := range out {
+			v, err := ReadInt(r)
+			if err != nil {
+				return nil, err
+			}
+			out[i] = v
+		}
+		return out, nil
+	case ir.Float:
+		out := make([]float64, n)
+		for i := range out {
+			v, err := ReadFloat64(r)
+			if err != nil {
+				return nil, err
+			}
+			out[i] = v
+		}
+		return out, nil
+	case ir.Bool:
+		out := make([]bool, n)
+		for i := range out {
+			v, err := ReadBool(r)
+			if err != nil {
+				return nil, err
+			}
+			out[i] = v
+		}
+		return out, nil
+	case ir.Str:
+		out := make([]string, n)
+		for i := range out {
+			v, err := ReadStr(r)
+			if err != nil {
+				return nil, err
+			}
+			if strings.IndexByte(v, 0) >= 0 {
+				return nil, fmt.Errorf("codec %s: string element contains NUL", t)
+			}
+			out[i] = v
+		}
+		return out, nil
+	default:
+		return nil, fmt.Errorf("codec: unknown list element type %q", elem)
+	}
+}
+
 // Write dispatches a typed value to its codec. t must match the Go
 // type of v (int64/float64/bool/string).
 func Write(w io.Writer, t ir.BasicType, v any) error {
+	if ir.IsList(t) {
+		return WriteList(w, t, v)
+	}
 	switch t {
 	case ir.Int:
 		i, ok := v.(int64)
@@ -145,6 +269,9 @@ func Write(w io.Writer, t ir.BasicType, v any) error {
 
 // Read dispatches a typed read.
 func Read(r io.Reader, t ir.BasicType) (any, error) {
+	if ir.IsList(t) {
+		return ReadList(r, t)
+	}
 	switch t {
 	case ir.Int:
 		return ReadInt(r)

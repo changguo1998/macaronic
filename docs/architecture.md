@@ -334,18 +334,22 @@ macaronic <script>   # 等价于 macaronic run <script>
   - `float`：8 字节 IEEE-754（float64）
   - `bool`：1 字节（0 / 1）
   - `str`：4 字节 little-endian 长度 + UTF-8 字节
+  - 一维 homogeneous list（`int[]` / `float[]` / `bool[]` / `str[]`）：
+    4 字节 little-endian 元素数量 + 每个元素的对应标量编码；元素数量
+    有上限，禁止嵌套列表。
 - **state 文件名契约**：`<var>.mac<type>`（如 `count.macint`、
-  `msg.macstr`）。**所有引擎统一**此命名，保证跨语言 state
-  互通。类型后缀 = 基本类型名（int/float/bool/str）。
+  `msg.macstr`、`values.macint[]`）。**所有引擎统一**此命名，保证跨语言
+  state 互通。类型后缀 = 契约类型名。
 - **codec helper**：shell 块的注入读写不直接解析二进制，而调用
   macaronic 的隐藏子命令 `codec`：
-  - `macaronic codec read <state-file> <type>` →
-    输出文本值（stdout）
-  - `macaronic codec write <state-file> <type> <value>` →
-    写二进制
-    生成的 shell prologue/epilogue 经 `$(macaronic codec read ...)` /
-    `macaronic codec write ...` 读写；Python/Go 引擎直接内嵌同一
-    codec。
+  - `macaronic codec read <state-file> <type>` → 输出人类可读值
+  - `macaronic codec write <state-file> <type> <value>` → 写标量二进制
+  - `macaronic codec read-list <state-file> <list-type>` → 逐元素 NUL 分隔
+    输出
+  - `macaronic codec write-list <state-file> <list-type> <value>...` → 按 argv
+    元素写入数组；字符串元素拒绝 NUL
+  生成的 shell list prologue/epilogue 使用 NUL 分隔读取和 argv 写入；
+  Python/Go 引擎直接内嵌同一 codec。
 
 ## 11. 错误模型与源映射
 
@@ -377,4 +381,4 @@ macaronic <script>   # 等价于 macaronic run <script>
     表达力有限。
   - 固定 `<脚本名>.run/` 目录存在并发运行竞争，以 fail-fast
     排他锁规避。
-  - struct 等复合类型需用户手工拆分为基本类型变量。
+  - 对象、struct、嵌套列表等更复杂的复合类型仍需用户手工拆分为基本类型或一维数组。

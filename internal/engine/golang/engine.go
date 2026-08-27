@@ -69,6 +69,9 @@ func analyzeBodyDetailed(lines []string, c ir.Contract, stage int) engine.Analys
 				continue
 			}
 			write, readAlso, newBind := identOp(line, id[1])
+			if !write && subscriptWrite(line, id[1]) {
+				write, readAlso = true, true
+			}
 			span := lineSpan(i, id[0], len(name))
 			if newBind {
 				a.Diagnostics = []ir.Diagnostic{{Var: name, Span: span,
@@ -100,6 +103,24 @@ func rememberSpan(spans map[string]*ir.Span, name string, span *ir.Span) {
 	if _, exists := spans[name]; !exists {
 		spans[name] = span
 	}
+}
+
+func subscriptWrite(line string, end int) bool {
+	rest := line[end:]
+	close := strings.IndexByte(rest, ']')
+	if close < 0 {
+		return false
+	}
+	tail := strings.TrimLeft(rest[close+1:], " \t")
+	if strings.HasPrefix(tail, "=") {
+		return len(tail) == 1 || tail[1] != '='
+	}
+	for _, op := range []string{"+=", "-=", "*=", "/=", "%="} {
+		if strings.HasPrefix(tail, op) {
+			return true
+		}
+	}
+	return false
 }
 
 // identOp inspects the text following identifier at index end of line

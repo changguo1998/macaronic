@@ -38,6 +38,9 @@ var rawRe = regexp.MustCompile(`\$([A-Za-z_][A-Za-z0-9_]*)`)
 // braceRe matches ${name}.
 var braceRe = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}`)
 
+// arrayBraceRe matches ${name[@]} and ${name[index]} reads.
+var arrayBraceRe = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\[[^]]*\]\}`)
+
 var shellIdentRe = regexp.MustCompile(`[A-Za-z_][A-Za-z0-9_]*`)
 
 // isWordChar reports whether b continues an identifier.
@@ -93,6 +96,13 @@ func (Engine) AnalyzeDetailed(st *ir.Stage, c ir.Contract) engine.Analysis {
 			}
 		}
 		for _, idx := range braceRe.FindAllStringSubmatchIndex(line, -1) {
+			name := line[idx[2]:idx[3]]
+			if _, ok := c[name]; ok {
+				a.Reads[name] = true
+				rememberSpan(a.ReadSpans, name, lineSpan(i, idx[2], len(name)))
+			}
+		}
+		for _, idx := range arrayBraceRe.FindAllStringSubmatchIndex(line, -1) {
 			name := line[idx[2]:idx[3]]
 			if _, ok := c[name]; ok {
 				a.Reads[name] = true
@@ -219,15 +229,20 @@ func (Engine) Emit(st *ir.Stage, c ir.Contract, stageDir, stateDir string,
 		genLine++
 	}
 
-	write("#!/bin/sh\n")
+	write("#!/usr/bin/env bash\n")
 	write("set -eu\n")
 	write("\n")
 
 	// Prologue: load contract variables into shell variables.
 	for _, name := range sortedVars(reads) {
 		f := filepath.Join(stateDir, stateFileName(name, c[name]))
-		write(fmt.Sprintf("%s=$(macaronic codec read %q %s)\n",
-			name, f, string(c[name])))
+		if ir.IsList(c[name]) {
+			write(fmt.Sprintf("mapfile -d '' -t %s < <(macaronic codec read-list %q %s)\n",
+				name, f, string(c[name])))
+		} else {
+			write(fmt.Sprintf("%s=$(macaronic codec read %q %s)\n",
+				name, f, string(c[name])))
+		}
 	}
 
 	// Verbatim user body, each line mapped back to source.
@@ -235,7 +250,7 @@ func (Engine) Emit(st *ir.Stage, c ir.Contract, stageDir, stateDir string,
 		write(l + "\n")
 		if sm != nil {
 			(*sm)[key(genFile, genLine)] = ir.SourceMapEntry{
-				SourceLine: st.StartLine + i, Kind: ir.OrigSource,
+				SourceLine: st.StartLine + 1 + i, Kind: ir.OrigSource,
 			}
 		}
 	}
@@ -243,8 +258,13 @@ func (Engine) Emit(st *ir.Stage, c ir.Contract, stageDir, stateDir string,
 	// Epilogue: persist contract variables.
 	for _, name := range sortedVars(writes) {
 		f := filepath.Join(stateDir, stateFileName(name, c[name]))
-		write(fmt.Sprintf("macaronic codec write %q %s \"${%s-}\"\n",
-			f, string(c[name]), name))
+		if ir.IsList(c[name]) {
+			write(fmt.Sprintf("macaronic codec write-list %q %s \"${%s[@]}\"\n",
+				f, string(c[name]), name))
+		} else {
+			write(fmt.Sprintf("macaronic codec write %q %s \"${%s-}\"\n",
+				f, string(c[name]), name))
+		}
 	}
 
 	if err := os.MkdirAll(stageDir, 0o755); err != nil {

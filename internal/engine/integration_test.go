@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/changguo1998/macaronic/internal/codec"
@@ -96,6 +97,45 @@ func TestCrossEngineFlow(t *testing.T) {
 	m, err := codec.Read(bytes.NewReader(msg), ir.Str)
 	if err != nil || m.(string) != "hello from shell & python" {
 		t.Errorf("msg state = %v (%v)", m, err)
+	}
+}
+
+func TestCrossEngineListFlow(t *testing.T) {
+	root := t.TempDir()
+	stateDir := filepath.Join(root, "state")
+	if err := os.MkdirAll(stateDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	binDir := t.TempDir()
+	bin := filepath.Join(binDir, "macaronic")
+	rootDir := repoRoot(t)
+	if out, err := exec.Command("go", "build", "-o", bin, rootDir+"/cmd/macaronic").CombinedOutput(); err != nil {
+		t.Fatalf("go build: %v\n%s", err, out)
+	}
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	contract := ir.Contract{"values": ir.ListOf(ir.Int)}
+
+	st1 := &ir.Stage{Index: 1, Lang: "shell", StartLine: 1, Body: []string{`values=(1 2 3)`}}
+	runStage(t, shell.Engine{}, st1, root, contract, "1")
+	st2 := &ir.Stage{Index: 2, Lang: "python", StartLine: 4, Body: []string{
+		"values: list[int]",
+		"values[0] += 10",
+	}}
+	runStage(t, python.Engine{}, st2, root, contract, "2")
+	st3 := &ir.Stage{Index: 3, Lang: "go", StartLine: 8, Body: []string{"values[1] += 20"}}
+	runStage(t, golang.Engine{}, st3, root, contract, "3")
+
+	data, err := os.ReadFile(filepath.Join(stateDir, "values.macint[]"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := codec.Read(bytes.NewReader(data), ir.ListOf(ir.Int))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []int64{11, 22, 3}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("values = %#v, want %#v", got, want)
 	}
 }
 

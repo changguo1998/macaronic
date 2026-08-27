@@ -3,6 +3,7 @@ package codec_test
 import (
 	"bytes"
 	"math"
+	"reflect"
 	"testing"
 
 	"github.com/changguo1998/macaronic/internal/codec"
@@ -111,5 +112,48 @@ func must(t *testing.T, err error) {
 	t.Helper()
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestListRoundTrip(t *testing.T) {
+	cases := []struct {
+		name string
+		typ  ir.BasicType
+		in   any
+	}{
+		{"int", ir.ListOf(ir.Int), []int64{0, -2, 9}},
+		{"float", ir.ListOf(ir.Float), []float64{1.5, -0.25}},
+		{"bool", ir.ListOf(ir.Bool), []bool{true, false, true}},
+		{"str", ir.ListOf(ir.Str), []string{"", "héllo", "世界"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var b bytes.Buffer
+			if err := codec.Write(&b, tc.typ, tc.in); err != nil {
+				t.Fatal(err)
+			}
+			got, err := codec.Read(&b, tc.typ)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(got, tc.in) {
+				t.Errorf("got %#v, want %#v", got, tc.in)
+			}
+		})
+	}
+}
+
+func TestListRejectsCorruptionAndOversizedCount(t *testing.T) {
+	truncated := []byte{2, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0}
+	if _, err := codec.Read(bytes.NewReader(truncated), ir.ListOf(ir.Int)); err == nil {
+		t.Fatal("truncated list decoded successfully")
+	}
+	oversized := []byte{0xff, 0xff, 0xff, 0xff}
+	if _, err := codec.Read(bytes.NewReader(oversized), ir.ListOf(ir.Int)); err == nil {
+		t.Fatal("oversized list decoded successfully")
+	}
+	var b bytes.Buffer
+	if err := codec.Write(&b, ir.ListOf(ir.Str), []string{"ok", "bad\x00"}); err == nil {
+		t.Fatal("NUL string element accepted")
 	}
 }

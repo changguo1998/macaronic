@@ -8,7 +8,8 @@ macaronic 是一个类编译的 **CLI 构建工具**：把单个混用多种编�
 
 - 块标记 `#!lang`，head 块 `#!mac` 声明跨块变量契约（TOML
   `[contract]`）
-- 基本类型：`int` / `float` / `bool` / `str`
+- 基本类型：`int` / `float` / `bool` / `str`；支持一维数组
+  `int[]` / `float[]` / `bool[]` / `str[]`
 - 首批块语言：`shell` + `python` + `go`
 - 每变量一个二进制 state 文件（脚本内自洽 ABI，见
   `docs/architecture.md` §10）
@@ -40,6 +41,8 @@ macaronic       hello.mac   # 等价于 run
 ```sh
 macaronic codec read  state/count.macint int    # 调试辅助
 macaronic codec write state/count.macint int 42
+macaronic codec read-list state/values.macint[] int[]
+macaronic codec write-list state/values.macint[] int[] 1 2 3
 ```
 
 ## 示例

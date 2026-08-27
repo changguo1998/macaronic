@@ -65,3 +65,32 @@ count = 123`, nil, ""}, // map[string]string decode error
 		}
 	}
 }
+
+func TestParseLists(t *testing.T) {
+	got, err := Parse(strings.Split(`[contract]
+	ints = "int[]"
+	floats = "float[]"
+	flags = "bool[]"
+	words = "string[]"`, "\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]ir.BasicType{
+		"ints": ir.ListOf(ir.Int), "floats": ir.ListOf(ir.Float),
+		"flags": ir.ListOf(ir.Bool), "words": ir.ListOf(ir.Str),
+	}
+	for name, typ := range want {
+		if got[name] != typ {
+			t.Errorf("contract[%q] = %q, want %q", name, got[name], typ)
+		}
+	}
+}
+
+func TestParseRejectsUnsupportedLists(t *testing.T) {
+	for _, typ := range []string{"int[][]", "{x:int}", "int|str", "int?"} {
+		_, err := Parse(strings.Split("[contract]\nx = \""+typ+"\"", "\n"))
+		if err == nil {
+			t.Errorf("type %q parsed successfully, want error", typ)
+		}
+	}
+}
