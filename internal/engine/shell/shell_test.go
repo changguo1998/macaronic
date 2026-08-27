@@ -302,3 +302,35 @@ func TestAnalyzeShellArithmeticReference(t *testing.T) {
 		t.Fatalf("reads=%v writes=%v, want arithmetic read+write", reads, writes)
 	}
 }
+
+func TestEmitShellM13ReadBuiltin(t *testing.T) {
+	stageDir := t.TempDir()
+	st := testStage("read -r count")
+	if err := (Engine{}).Emit(st, ir.Contract{"count": ir.Int}, stageDir, t.TempDir(), nil); err != nil {
+		t.Fatalf("Emit: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(stageDir, genFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := string(data)
+	if !strings.Contains(out, `macaronic codec write`) || strings.Contains(out, `macaronic codec read`) {
+		t.Errorf("read builtin should emit write-only plumbing:\n%s", out)
+	}
+}
+
+func TestEmitShellM13ArithmeticReference(t *testing.T) {
+	stageDir := t.TempDir()
+	st := testStage("count=$((count + 1))")
+	if err := (Engine{}).Emit(st, ir.Contract{"count": ir.Int}, stageDir, t.TempDir(), nil); err != nil {
+		t.Fatalf("Emit: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(stageDir, genFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := string(data)
+	if !strings.Contains(out, `macaronic codec read`) || !strings.Contains(out, `macaronic codec write`) {
+		t.Errorf("arithmetic update should emit read+write plumbing:\n%s", out)
+	}
+}

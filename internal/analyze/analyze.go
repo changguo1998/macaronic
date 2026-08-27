@@ -147,12 +147,8 @@ func (a Analyzer) Run(p *ir.Program) Report {
 		}
 		read, write, err := eng.Analyze(st, p.Contract)
 		mergeVarSets(inferred, read, write)
-		// Record this stage's writes first: intra-stage order is the
-		// user's business, so a stage that itself produces a var may
-		// read it too (cross-block dependency check only).
-		for v := range write {
-			sym[v] = p.Contract[v]
-		}
+		// Reads must be satisfied by an earlier stage. The current stage's
+		// writes are merged only after this cross-stage dependency check.
 		for v := range read {
 			if _, ok := sym[v]; !ok {
 				iss = append(iss, Issue{
@@ -161,6 +157,11 @@ func (a Analyzer) Run(p *ir.Program) Report {
 						v, p.Contract[v]),
 				})
 			}
+		}
+		// Record writes after checking reads; a same-stage read+write still
+		// requires a value produced by an earlier stage.
+		for v := range write {
+			sym[v] = p.Contract[v]
 		}
 		if err != nil {
 			iss = append(iss, Issue{

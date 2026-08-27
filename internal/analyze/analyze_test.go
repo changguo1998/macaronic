@@ -121,8 +121,14 @@ func TestShadowReported(t *testing.T) {
 
 func TestZeroErrorSample(t *testing.T) {
 	p := &ir.Program{Contract: ir.Contract{"count": ir.Int}}
-	p.Stages = append(p.Stages, *mkStage(1, "shell", 5))
-	r := mockResolver(mockEngine{name: "shell", reads: ir.VarSet{"count": true}, writes: ir.VarSet{"count": true}})
+	p.Stages = append(p.Stages,
+		*mkStage(1, "producer", 5),
+		*mkStage(2, "consumer", 9),
+	)
+	r := mockResolver(
+		mockEngine{name: "producer", writes: ir.VarSet{"count": true}},
+		mockEngine{name: "consumer", reads: ir.VarSet{"count": true}, writes: ir.VarSet{"count": true}},
+	)
 	if got := (Analyzer{Engines: r}).Run(p); !got.OK() {
 		t.Errorf("expected clean program, got %+v", got.Issues)
 	}
@@ -247,18 +253,42 @@ func TestM12SuppressedWhenEngineErrors(t *testing.T) {
 }
 
 func TestM12NoWarningWhenInferred(t *testing.T) {
-	// count is observed AND inferred (read+write in the same stage:
-	// writes are recorded before the read check, so no
-	// read-before-write error) -> no M12 warning, no unused
-	// warning: clean report.
+	// count is observed and inferred in the consumer stage; an earlier
+	// producer satisfies the cross-stage dependency, so no warning/error.
 	p := &ir.Program{Contract: ir.Contract{"count": ir.Int}}
-	st := mkStage(1, "shell", 5)
-	st.Body = []string{"echo $count"}
-	p.Stages = append(p.Stages, *st)
-	r := mockResolver(mockEngine{name: "shell", reads: ir.VarSet{"count": true},
-		writes: ir.VarSet{"count": true}})
+	producer := mkStage(1, "producer", 5)
+	consumer := mkStage(2, "consumer", 9)
+	consumer.Body = []string{"echo $count"}
+	p.Stages = append(p.Stages, *producer, *consumer)
+	r := mockResolver(
+		mockEngine{name: "producer", writes: ir.VarSet{"count": true}},
+		mockEngine{name: "consumer", reads: ir.VarSet{"count": true}},
+	)
 	got := (Analyzer{Engines: r}).Run(p)
 	if len(got.Issues) != 0 {
 		t.Errorf("issues = %+v, want none (observed and inferred)", got.Issues)
+	}
+}
+
+func TestSameStageReadWriteNeedsEarlierWrite(t *testing.T) {
+	p := &ir.Program{Contract: ir.Contract{"count": ir.Int}}
+	p.Stages = append(p.Stages, *mkStage(1, "rw", 5))
+	r := mockResolver(mockEngine{name: "rw", reads: ir.VarSet{"count": true}, writes: ir.VarSet{"count": true}})
+	got := (Analyzer{Engines: r}).Run(p)
+	if !got.HasErrors() {
+		t.Fatalf("same-stage read+write without earlier write must fail: %+v", got.Issues)
+	}
+}
+
+func TestEarlierWriteAllowsReadWrite(t *testing.T) {
+	p := &ir.Program{Contract: ir.Contract{"count": ir.Int}}
+	p.Stages = append(p.Stages, *mkStage(1, "producer", 5), *mkStage(2, "rw", 9))
+	r := mockResolver(
+		mockEngine{name: "producer", writes: ir.VarSet{"count": true}},
+		mockEngine{name: "rw", reads: ir.VarSet{"count": true}, writes: ir.VarSet{"count": true}},
+	)
+	got := (Analyzer{Engines: r}).Run(p)
+	if !got.OK() {
+		t.Fatalf("earlier write must allow later read+write: %+v", got.Issues)
 	}
 }

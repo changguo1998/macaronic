@@ -1,6 +1,8 @@
 package golang
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -101,5 +103,22 @@ func TestAnalyzeGoIncrementDecrement(t *testing.T) {
 	}
 	if !reads["count"] || !writes["count"] {
 		t.Fatalf("reads=%v writes=%v, want increment/decrement read+write", reads, writes)
+	}
+}
+
+func TestEmitGoM13IncrementDecrement(t *testing.T) {
+	stageDir := t.TempDir()
+	st := &ir.Stage{Index: 1, Lang: "go", StartLine: 10, Body: []string{"count++", "count--"}}
+	sm := ir.SourceMap{}
+	if err := (Engine{}).Emit(st, ir.Contract{"count": ir.Int}, stageDir, t.TempDir(), &sm); err != nil {
+		t.Fatalf("Emit: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(stageDir, goFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := string(data)
+	if !strings.Contains(out, "mReadInt64") || !strings.Contains(out, "mWriteInt64") {
+		t.Errorf("increment/decrement should emit read+write plumbing:\n%s", out)
 	}
 }

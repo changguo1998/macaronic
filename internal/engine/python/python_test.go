@@ -279,3 +279,37 @@ func TestAnalyzePythonDefParamShadow(t *testing.T) {
 		t.Fatalf("err=%v, want function-parameter shadow error", err)
 	}
 }
+
+func TestEmitPythonM13PrologueEpilogue(t *testing.T) {
+	cases := []struct {
+		name string
+		body []string
+	}{
+		{"paren-continuation", []string{"x: int = make_value(", "    x", ")"}},
+		{"subscript-write", []string{"x: int", "x[0] = 1"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			stageDir := t.TempDir()
+			st := stage("python", 3, tc.body...)
+			if err := (Engine{}).Emit(st, ir.Contract{"x": ir.Int}, stageDir, t.TempDir(), nil); err != nil {
+				t.Fatalf("Emit: %v", err)
+			}
+			data, err := os.ReadFile(filepath.Join(stageDir, genFile))
+			if err != nil {
+				t.Fatal(err)
+			}
+			out := string(data)
+			if !strings.Contains(out, `x = _mac_read`) || !strings.Contains(out, `_mac_write`) {
+				t.Errorf("generated code lacks read/write plumbing:\n%s", out)
+			}
+		})
+	}
+}
+
+func TestEmitPythonM13DefParamShadow(t *testing.T) {
+	st := stage("python", 3, "def f(x):", "    return x")
+	if err := (Engine{}).Emit(st, ir.Contract{"x": ir.Int}, t.TempDir(), t.TempDir(), nil); err == nil || !strings.Contains(err.Error(), "shadows the contract binding") {
+		t.Fatalf("Emit error = %v, want parameter-shadow diagnostic", err)
+	}
+}

@@ -86,3 +86,28 @@ func TestCheckObservedNotInferredWarns(t *testing.T) {
 		t.Errorf("stdout = %q, want M12 warning wording", out.String())
 	}
 }
+
+func TestCheckArithmeticDependency(t *testing.T) {
+	engine.Register(shell.Engine{})
+	cases := []struct {
+		name    string
+		file    string
+		want    int
+		message string
+	}{
+		{"without prior writer", "arithmetic_without_prior.mac", exitFail, "read of \"count\" before any write"},
+		{"with prior writer", "arithmetic_with_prior.mac", exitOK, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var out, errOut strings.Builder
+			code := Run([]string{"check", filepath.Join("testdata", tc.file)}, &out, &errOut)
+			if code != tc.want {
+				t.Fatalf("code = %d, want %d; stdout=%q stderr=%q", code, tc.want, out.String(), errOut.String())
+			}
+			if tc.message != "" && !strings.Contains(out.String(), tc.message) {
+				t.Errorf("stdout = %q, want %q", out.String(), tc.message)
+			}
+		})
+	}
+}

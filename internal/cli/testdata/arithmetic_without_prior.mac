@@ -1,0 +1,6 @@
+#!mac
+[contract]
+count = "int"
+
+#!shell
+count=$((count + 1))
