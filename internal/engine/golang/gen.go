@@ -134,6 +134,13 @@ type genLine struct {
 	kind ir.OriginKind
 }
 
+// stateFileName is the state file naming convention shared by all
+// engines: <name>.mac<type> (e.g. count.macint). Cross-engine state
+// interop depends on this exact form.
+func stateFileName(name string, t ir.BasicType) string {
+	return name + ".mac" + string(t)
+}
+
 // RunCommand implements engine.Engine: run.sh invokes the built
 // binary (not `go run`); the binary resolves state/ relative to its
 // own location, so cwd does not matter.
@@ -233,7 +240,7 @@ func readStmt(name string, t ir.BasicType) []genLine {
 	s := ir.OrigSynthetic
 	return []genLine{
 		{text: "\t{", kind: s},
-		{text: fmt.Sprintf("\t\tv, err := %s(filepath.Join(stateDir, %q))", readHelper(t), name), kind: s},
+		{text: fmt.Sprintf("\t\tv, err := %s(filepath.Join(stateDir, %q))", readHelper(t), stateFileName(name, t)), kind: s},
 		{text: "\t\tif err != nil {", kind: s},
 		{text: "\t\t\tmFail(err)", kind: s},
 		{text: "\t\t}", kind: s},
@@ -247,7 +254,7 @@ func writeStmt(name string, t ir.BasicType) []genLine {
 	s := ir.OrigSynthetic
 	return []genLine{
 		{text: fmt.Sprintf("\tif err := %s(filepath.Join(stateDir, %q), %s); err != nil {",
-			writeHelper(t), name, name), kind: s},
+			writeHelper(t), stateFileName(name, t), name), kind: s},
 		{text: "\t\tmFail(err)", kind: s},
 		{text: "\t}", kind: s},
 	}

@@ -62,20 +62,27 @@ func (Engine) Analyze(st *ir.Stage, c ir.Contract) (ir.VarSet, ir.VarSet, error)
 		anno := annoRe(v)
 		ass := assignRe(v)
 		hasAnno := false
-		isWrite := false
+		hasWrite := false
+		firstIsWrite := false
 		firstRef := -1
 		for i, ln := range st.Body {
 			if !refRe.MatchString(ln) {
 				continue
 			}
 			if firstRef < 0 {
+				// Sequential evaluation (architecture §6): the first
+				// occurrence decides whether this block CONSUMES v
+				// (read) or PRODUCES it (pure write). An annotated
+				// assignment whose RHS does not reference v is a
+				// producer; anything else starts by reading.
 				firstRef = i
+				firstIsWrite = ass.MatchString(ln) && !rhsHasRef(ln, v)
 			}
 			if anno.MatchString(ln) {
 				hasAnno = true
-				if ass.MatchString(ln) {
-					isWrite = true
-				}
+			}
+			if ass.MatchString(ln) && anno.MatchString(ln) {
+				hasWrite = true
 			}
 		}
 		if firstRef < 0 {
@@ -86,17 +93,35 @@ func (Engine) Analyze(st *ir.Stage, c ir.Contract) (ir.VarSet, ir.VarSet, error)
 				"python: contract variable %q used without type annotation (line %d). Add `%s: %s`",
 				v, st.StartLine+1+firstRef, v, c[v])
 		}
-		if isWrite {
-			writes[v] = true
-		} else {
+		if !firstIsWrite {
 			reads[v] = true
+		}
+		if hasWrite {
+			writes[v] = true
 		}
 	}
 	return reads, writes, nil
 }
 
+// rhsHasRef reports whether v appears after the first '=' on the
+// line, i.e. on the right-hand side of an assignment.
+func rhsHasRef(line, v string) bool {
+	i := strings.Index(line, "=")
+	if i < 0 {
+		return false
+	}
+	return varRefRe(v).MatchString(line[i+1:])
+}
+
 // genFile is the emitted Python file name.
 const genFile = "run.py"
+
+// stateFileName is the state file naming convention shared by all
+// engines: <name>.mac<type> (e.g. count.macint). Cross-engine state
+// interop depends on this exact form.
+func stateFileName(name string, t ir.BasicType) string {
+	return name + ".mac" + string(t)
+}
 
 // Emit writes stageDir/run.py: prologue reads, user body, epilogue
 // writes. State files live at stateDir/<var> and are encoded with the
@@ -167,7 +192,7 @@ func (e Engine) Emit(st *ir.Stage, c ir.Contract, stageDir, stateDir string, sm 
 	}
 	for _, name := range vars {
 		emit(fmt.Sprintf("%s = _mac_read(%q, %q)", name,
-			filepath.Join(stateDir, name), string(c[name])), 0, ir.OrigSynthetic)
+			filepath.Join(stateDir, stateFileName(name, c[name])), string(c[name])), 0, ir.OrigSynthetic)
 	}
 
 	// User code (OrigSource per body line).
@@ -181,7 +206,7 @@ func (e Engine) Emit(st *ir.Stage, c ir.Contract, stageDir, stateDir string, sm 
 		emit("", 0, ir.OrigSynthetic)
 	}
 	for _, name := range vars {
-		emit(fmt.Sprintf("_mac_write(%q, %q, %s)", filepath.Join(stateDir, name),
+		emit(fmt.Sprintf("_mac_write(%q, %q, %s)", filepath.Join(stateDir, stateFileName(name, c[name])),
 			string(c[name]), name), 0, ir.OrigSynthetic)
 	}
 

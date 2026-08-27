@@ -103,10 +103,10 @@ func TestEmitReadWrite(t *testing.T) {
 		t.Fatal(err)
 	}
 	// pre-populate state with an int and a str
-	if err := codec.WriteInt(writeStateFile(t, filepath.Join(stateDir, "count")), 5); err != nil {
+	if err := codec.WriteInt(writeStateFile(t, filepath.Join(stateDir, "count.macint")), 5); err != nil {
 		t.Fatal(err)
 	}
-	if err := codec.WriteStr(writeStateFile(t, filepath.Join(stateDir, "msg")), "hello"); err != nil {
+	if err := codec.WriteStr(writeStateFile(t, filepath.Join(stateDir, "msg.macstr")), "hello"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -137,7 +137,7 @@ func TestEmitTracebackDiagnostic(t *testing.T) {
 	if err := os.MkdirAll(stateDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := codec.WriteInt(writeStateFile(t, filepath.Join(stateDir, "count")), 5); err != nil {
+	if err := codec.WriteInt(writeStateFile(t, filepath.Join(stateDir, "count.macint")), 5); err != nil {
 		t.Fatal(err)
 	}
 	// user code divides by zero -> ZeroDivisionError at the print line

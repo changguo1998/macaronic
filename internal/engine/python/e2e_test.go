@@ -67,7 +67,7 @@ func TestE2EPyToPy(t *testing.T) {
 		t.Errorf("stage1 output = %q, want empty", out1) // epilogue only
 	}
 	// verify state/x bytes via internal codec
-	f, err := os.Open(filepath.Join(stateDir, "x"))
+	f, err := os.Open(filepath.Join(stateDir, "x.macint"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,8 +92,8 @@ func TestE2EShellToPy(t *testing.T) {
 	for _, kv := range []struct {
 		file, typ, val string
 	}{
-		{"count", "int", "7"},
-		{"msg", "str", "shell-ok"},
+		{"count.macint", "int", "7"},
+		{"msg.macstr", "str", "shell-ok"},
 	} {
 		bb := exec.Command(mac, "codec", "write",
 			filepath.Join(stateDir, kv.file), kv.typ, kv.val)
@@ -155,7 +155,7 @@ func TestE2EPyWritesForNext(t *testing.T) {
 		t.Fatalf("stage1 run: %v", err)
 	}
 	// verify state/acc readable as int
-	f, err := os.Open(filepath.Join(stateDir, "acc"))
+	f, err := os.Open(filepath.Join(stateDir, "acc.macint"))
 	if err != nil {
 		t.Fatal(err)
 	}

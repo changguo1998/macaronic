@@ -52,25 +52,25 @@ func TestCodecAlignGoldenBytes(t *testing.T) {
 		}
 		return b
 	}
-	if got, want := readBinary("count"), goldenInt(7); !bytes.Equal(got, want) {
+	if got, want := readBinary("count.macint"), goldenInt(7); !bytes.Equal(got, want) {
 		t.Errorf("count bytes = %v, want %v", got, want)
 	}
-	if got, want := readBinary("total"), goldenFloat(3.25); !bytes.Equal(got, want) {
+	if got, want := readBinary("total.macfloat"), goldenFloat(3.25); !bytes.Equal(got, want) {
 		t.Errorf("total bytes = %v, want %v", got, want)
 	}
-	if got, want := readBinary("flag"), []byte{1}; !bytes.Equal(got, want) {
+	if got, want := readBinary("flag.macbool"), []byte{1}; !bytes.Equal(got, want) {
 		t.Errorf("flag bytes = %v, want %v", got, want)
 	}
-	if got, want := readBinary("msg"), goldenStr("héllo"); !bytes.Equal(got, want) {
+	if got, want := readBinary("msg.macstr"), goldenStr("héllo"); !bytes.Equal(got, want) {
 		t.Errorf("msg bytes = %v, want %v", got, want)
 	}
 
 	// internal/codec can read back what the stage wrote (interop).
-	v, err := codec.Read(bytes.NewReader(readBinary("count")), ir.Int)
+	v, err := codec.Read(bytes.NewReader(readBinary("count.macint")), ir.Int)
 	if err != nil || v.(int64) != 7 {
 		t.Errorf("internal/codec read count = %v (%v)", v, err)
 	}
-	v, _ = codec.Read(bytes.NewReader(readBinary("msg")), ir.Str)
+	v, _ = codec.Read(bytes.NewReader(readBinary("msg.macstr")), ir.Str)
 	if v.(string) != "héllo" {
 		t.Errorf("internal/codec read msg = %v", v)
 	}
@@ -136,11 +136,11 @@ func TestStageToStage(t *testing.T) {
 		t.Fatalf("stage2 run: %v\n%s", err, out)
 	}
 
-	cnt, err := os.ReadFile(filepath.Join(stateDir, "count"))
+	cnt, err := os.ReadFile(filepath.Join(stateDir, "count.macint"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	msg, _ := os.ReadFile(filepath.Join(stateDir, "msg"))
+	msg, _ := os.ReadFile(filepath.Join(stateDir, "msg.macstr"))
 	v, _ := codec.Read(bytes.NewReader(cnt), ir.Int)
 	if v.(int64) != 42 {
 		t.Errorf("final count = %v, want 42", v)
