@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/changguo1998/macaronic/internal/engine"
 	"github.com/changguo1998/macaronic/internal/ir"
 )
 
@@ -71,8 +72,19 @@ var defStartRe = regexp.MustCompile(`^\s*def\s+[A-Za-z_][A-Za-z0-9_]*\s*\(`)
 // declaration “v: type“ or in expressions, it is a read and requires
 // an annotation somewhere in the block.
 func (Engine) Analyze(st *ir.Stage, c ir.Contract) (ir.VarSet, ir.VarSet, error) {
-	reads := ir.VarSet{}
-	writes := ir.VarSet{}
+	a := (Engine{}).AnalyzeDetailed(st, c)
+	return a.Reads, a.Writes, a.Error(st)
+}
+
+// AnalyzeDetailed scans the block and records source spans for inferred
+// reads/writes and static diagnostics. Spans are body-relative.
+func (Engine) AnalyzeDetailed(st *ir.Stage, c ir.Contract) engine.Analysis {
+	a := engine.Analysis{
+		Reads:      ir.VarSet{},
+		Writes:     ir.VarSet{},
+		ReadSpans:  map[string]*ir.Span{},
+		WriteSpans: map[string]*ir.Span{},
+	}
 	names := make([]string, 0, len(c))
 	for v := range c {
 		names = append(names, v)
@@ -81,10 +93,10 @@ func (Engine) Analyze(st *ir.Stage, c ir.Contract) (ir.VarSet, ir.VarSet, error)
 	// Function parameters create local bindings. Detect contract-name
 	// parameters before the normal annotation check so shadowing wins.
 	for _, v := range names {
-		if defParamShadow(st.Body, v) {
-			return nil, nil, fmt.Errorf(
-				"python: contract variable %q used as a function parameter shadows the contract binding",
-				v)
+		if span := defParamShadowSpan(st.Body, v); span != nil {
+			a.Diagnostics = []ir.Diagnostic{{Var: v, Span: span,
+				Msg: fmt.Sprintf("python: contract variable %q used as a function parameter shadows the contract binding", v)}}
+			return a
 		}
 	}
 	for _, v := range names {
@@ -95,17 +107,12 @@ func (Engine) Analyze(st *ir.Stage, c ir.Contract) (ir.VarSet, ir.VarSet, error)
 		hasWrite := false
 		firstIsWrite := false
 		firstRef := -1
+		firstWrite := -1
 		for i, ln := range st.Body {
 			if !refRe.MatchString(ln) {
 				continue
 			}
 			if firstRef < 0 {
-				// Sequential evaluation (architecture §6): the first
-				// occurrence decides whether this block CONSUMES v
-				// (read) or PRODUCES it (pure write). Only an
-				// annotated/plain assignment whose RHS does not
-				// reference v can be a pure write; augmented
-				// assignments (x += ...) always read first.
 				firstRef = i
 				end := logicalSpan(st.Body, i)
 				firstIsWrite = (ass.MatchString(ln) || plainAssignRe(v).MatchString(ln)) &&
@@ -114,47 +121,56 @@ func (Engine) Analyze(st *ir.Stage, c ir.Contract) (ir.VarSet, ir.VarSet, error)
 			if anno.MatchString(ln) {
 				hasAnno = true
 			}
-			// A write is an annotated assignment, a plain assignment
-			// (x = ...), or an augmented assignment (x += ...) whose
-			// block declares the variable. Only annotated lines count
-			// against the missing-annotation error.
 			if ass.MatchString(ln) || plainAssignRe(v).MatchString(ln) ||
-				augmentedAssignRe(v).MatchString(ln) {
+				augmentedAssignRe(v).MatchString(ln) || subscriptAssignRe(v).MatchString(ln) {
 				hasWrite = true
+				if firstWrite < 0 {
+					firstWrite = i
+				}
 			}
 			if subscriptAssignRe(v).MatchString(ln) {
-				// In-place mutation needs the pre-existing value.
-				hasWrite = true
-				reads[v] = true
+				a.Reads[v] = true
+				if _, ok := a.ReadSpans[v]; !ok {
+					a.ReadSpans[v] = lineSpan(ln, i, v)
+				}
 			}
 		}
 		if firstRef < 0 {
 			continue
 		}
 		if !hasAnno {
-			return nil, nil, fmt.Errorf(
-				"python: contract variable %q used without type annotation (line %d). Add `%s: %s`",
-				v, st.StartLine+1+firstRef, v, c[v])
+			a.Diagnostics = []ir.Diagnostic{{Var: v, Span: lineSpan(st.Body[firstRef], firstRef, v),
+				Msg: fmt.Sprintf("python: contract variable %q used without type annotation. Add `%s: %s`", v, v, c[v])}}
+			return a
 		}
 		if !firstIsWrite {
-			reads[v] = true
+			a.Reads[v] = true
+			if _, ok := a.ReadSpans[v]; !ok {
+				a.ReadSpans[v] = lineSpan(st.Body[firstRef], firstRef, v)
+			}
 		}
 		if hasWrite {
-			writes[v] = true
+			a.Writes[v] = true
+			if firstWrite >= 0 {
+				a.WriteSpans[v] = lineSpan(st.Body[firstWrite], firstWrite, v)
+			}
 		}
 	}
-	return reads, writes, nil
+	return a
+}
+
+// lineSpan returns a body-relative span for the first textual occurrence of name.
+func lineSpan(line string, bodyLine int, name string) *ir.Span {
+	col := strings.Index(line, name)
+	if col < 0 {
+		col = 0
+	}
+	return &ir.Span{StartLine: bodyLine + 1, StartCol: col + 1,
+		EndLine: bodyLine + 1, EndCol: col + len(name) + 1}
 }
 
 // rhsHasRef reports whether v appears after the first '=' on the
 // line, i.e. on the right-hand side of an assignment.
-func rhsHasRef(line, v string) bool {
-	i := strings.Index(line, "=")
-	if i < 0 {
-		return false
-	}
-	return varRefRe(v).MatchString(line[i+1:])
-}
 
 // rhsHasRefSpan extends RHS detection across a parenthesized logical line.
 func rhsHasRefSpan(lines []string, start, end int, v string) bool {
@@ -191,7 +207,10 @@ func delimiterBalance(line string) int {
 }
 
 // defParamShadow reports whether name is a parameter of any def statement.
-func defParamShadow(lines []string, name string) bool {
+// defParamShadow reports whether name is a parameter of any def statement.
+
+// defParamShadowSpan locates the first parameter that shadows name.
+func defParamShadowSpan(lines []string, name string) *ir.Span {
 	paramRe := regexp.MustCompile(`(?:^|,)\s*\*{0,2}` + regexp.QuoteMeta(name) + `\s*(?:,|=|:|$)`)
 	for i, line := range lines {
 		if !defStartRe.MatchString(line) {
@@ -213,11 +232,23 @@ func defParamShadow(lines []string, name string) bool {
 		if close >= 0 {
 			text = text[:close]
 		}
-		if paramRe.MatchString(text) {
-			return true
+		match := paramRe.FindStringIndex(text)
+		if match == nil {
+			continue
 		}
+		pos := match[0]
+		lineOffset := strings.Count(text[:pos], "\n")
+		col := pos
+		if nl := strings.LastIndex(text[:pos], "\n"); nl >= 0 {
+			col = pos - nl - 1
+		}
+		if lineOffset == 0 {
+			col += start + 1
+		}
+		return &ir.Span{StartLine: i + lineOffset + 1, StartCol: col + 1,
+			EndLine: i + lineOffset + 1, EndCol: col + len(name) + 1}
 	}
-	return false
+	return nil
 }
 
 func matchingParenEnd(lines []string, line, col int) int {

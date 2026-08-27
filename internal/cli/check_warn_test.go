@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/changguo1998/macaronic/internal/engine"
+	golangengine "github.com/changguo1998/macaronic/internal/engine/golang"
+	pythonengine "github.com/changguo1998/macaronic/internal/engine/python"
 	"github.com/changguo1998/macaronic/internal/engine/shell"
 )
 
@@ -107,6 +109,33 @@ func TestCheckArithmeticDependency(t *testing.T) {
 			}
 			if tc.message != "" && !strings.Contains(out.String(), tc.message) {
 				t.Errorf("stdout = %q, want %q", out.String(), tc.message)
+			}
+		})
+	}
+}
+
+func TestCheckStaticDiagnosticsUseOriginalLines(t *testing.T) {
+	engine.Register(shell.Engine{})
+	engine.Register(pythonengine.Engine{})
+	engine.Register(golangengine.Engine{})
+	cases := []struct {
+		name string
+		file string
+		want string
+	}{
+		{"shell", "shell_nonfirst_diagnostic.mac", `error: stage 1 line 7 var "count":`},
+		{"python", "python_nonfirst_diagnostic.mac", `error: stage 1 line 7 var "count":`},
+		{"go", "go_nonfirst_diagnostic.mac", `error: stage 1 line 7 var "count":`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var out, errOut strings.Builder
+			code := Run([]string{"check", filepath.Join("testdata", tc.file)}, &out, &errOut)
+			if code != exitFail {
+				t.Fatalf("code = %d, want failure; stdout=%q stderr=%q", code, out.String(), errOut.String())
+			}
+			if !strings.Contains(out.String(), tc.want) {
+				t.Errorf("stdout = %q, want %q", out.String(), tc.want)
 			}
 		})
 	}

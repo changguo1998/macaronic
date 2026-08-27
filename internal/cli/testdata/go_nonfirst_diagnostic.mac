@@ -1,0 +1,7 @@
+#!mac
+[contract]
+count = "int"
+
+#!go
+// spacer
+count := 1

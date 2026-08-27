@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/changguo1998/macaronic/internal/engine"
 	"github.com/changguo1998/macaronic/internal/ir"
 )
 
@@ -31,20 +32,33 @@ func (Engine) Name() string { return "go" }
 //   - `y := ..` introduces a new local binding; if y is a contract
 //     variable it shadows the contract and is reported as an error.
 func (e Engine) Analyze(st *ir.Stage, c ir.Contract) (ir.VarSet, ir.VarSet, error) {
-	reads, writes, shadow := analyzeBody(st.Body, c)
-	if shadow != "" {
-		return reads, writes, fmt.Errorf(
-			"go stage%d: `:=` new binding %q shadows contract variable",
-			st.Index, shadow)
-	}
-	return reads, writes, nil
+	a := e.AnalyzeDetailed(st, c)
+	return a.Reads, a.Writes, a.Error(st)
+}
+
+// AnalyzeDetailed scans Go identifiers and records body-relative spans.
+func (e Engine) AnalyzeDetailed(st *ir.Stage, c ir.Contract) engine.Analysis {
+	a := analyzeBodyDetailed(st.Body, c, st.Index)
+	return a
 }
 
 // analyzeBody performs read/write/shadow inference over the user body.
 func analyzeBody(lines []string, c ir.Contract) (reads, writes ir.VarSet, shadow string) {
-	reads = ir.VarSet{}
-	writes = ir.VarSet{}
-	for _, line := range lines {
+	a := analyzeBodyDetailed(lines, c, 0)
+	if len(a.Diagnostics) > 0 {
+		shadow = a.Diagnostics[0].Var
+	}
+	return a.Reads, a.Writes, shadow
+}
+
+func analyzeBodyDetailed(lines []string, c ir.Contract, stage int) engine.Analysis {
+	a := engine.Analysis{
+		Reads:      ir.VarSet{},
+		Writes:     ir.VarSet{},
+		ReadSpans:  map[string]*ir.Span{},
+		WriteSpans: map[string]*ir.Span{},
+	}
+	for i, line := range lines {
 		if isCommentOnly(line) {
 			continue
 		}
@@ -55,21 +69,37 @@ func analyzeBody(lines []string, c ir.Contract) (reads, writes ir.VarSet, shadow
 				continue
 			}
 			write, readAlso, newBind := identOp(line, id[1])
+			span := lineSpan(i, id[0], len(name))
 			if newBind {
-				shadow = name
-				return
+				a.Diagnostics = []ir.Diagnostic{{Var: name, Span: span,
+					Msg: fmt.Sprintf("go stage%d: `:=` new binding %q shadows contract variable", stage, name)}}
+				return a
 			}
 			if write {
-				writes[name] = true
+				a.Writes[name] = true
+				rememberSpan(a.WriteSpans, name, span)
 				if readAlso {
-					reads[name] = true
+					a.Reads[name] = true
+					rememberSpan(a.ReadSpans, name, span)
 				}
 			} else {
-				reads[name] = true
+				a.Reads[name] = true
+				rememberSpan(a.ReadSpans, name, span)
 			}
 		}
 	}
-	return
+	return a
+}
+
+func lineSpan(bodyLine, col, width int) *ir.Span {
+	return &ir.Span{StartLine: bodyLine + 1, StartCol: col + 1,
+		EndLine: bodyLine + 1, EndCol: col + width + 1}
+}
+
+func rememberSpan(spans map[string]*ir.Span, name string, span *ir.Span) {
+	if _, exists := spans[name]; !exists {
+		spans[name] = span
+	}
 }
 
 // identOp inspects the text following identifier at index end of line

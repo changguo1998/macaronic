@@ -6,6 +6,9 @@ import (
 	"testing"
 
 	"github.com/changguo1998/macaronic/internal/engine"
+	golangengine "github.com/changguo1998/macaronic/internal/engine/golang"
+	pythonengine "github.com/changguo1998/macaronic/internal/engine/python"
+	shellengine "github.com/changguo1998/macaronic/internal/engine/shell"
 	"github.com/changguo1998/macaronic/internal/ir"
 )
 
@@ -290,5 +293,34 @@ func TestEarlierWriteAllowsReadWrite(t *testing.T) {
 	got := (Analyzer{Engines: r}).Run(p)
 	if !got.OK() {
 		t.Fatalf("earlier write must allow later read+write: %+v", got.Issues)
+	}
+}
+
+func TestDetailedDiagnosticsMapToSourceLines(t *testing.T) {
+	cases := []struct {
+		name    string
+		eng     engine.Engine
+		body    []string
+		want    int
+		varName string
+	}{
+		{"shell read", shellengine.Engine{}, []string{"echo ready", "echo $count"}, 7, "count"},
+		{"python annotation", pythonengine.Engine{}, []string{"print(1)", "print(count)"}, 7, "count"},
+		{"go shadow", golangengine.Engine{}, []string{"// spacer", "count := 1"}, 7, "count"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := &ir.Program{Contract: ir.Contract{"count": ir.Int}, Stages: []ir.Stage{{
+				Index: 1, Lang: tc.eng.Name(), StartLine: 5, EndLine: 7, Body: tc.body,
+			}}}
+			got := (Analyzer{Engines: mockResolver(tc.eng)}).Run(p)
+			if len(got.Issues) != 1 {
+				t.Fatalf("issues = %+v, want one diagnostic", got.Issues)
+			}
+			it := got.Issues[0]
+			if it.Line != tc.want || it.Var != tc.varName || it.Stage != 1 {
+				t.Errorf("issue = %+v, want stage 1 line %d var %q", it, tc.want, tc.varName)
+			}
+		})
 	}
 }

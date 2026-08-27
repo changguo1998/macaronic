@@ -1,0 +1,7 @@
+#!mac
+[contract]
+count = "int"
+
+#!shell
+echo ready
+echo $count

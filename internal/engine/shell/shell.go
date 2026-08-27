@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/changguo1998/macaronic/internal/engine"
 	"github.com/changguo1998/macaronic/internal/ir"
 )
 
@@ -52,41 +53,85 @@ func isWordChar(b byte) bool {
 // conversion (Bash itself is untyped). No shadowing to report for
 // shell (assigning a contract variable IS the intended write).
 func (Engine) Analyze(st *ir.Stage, c ir.Contract) (ir.VarSet, ir.VarSet, error) {
-	r, w := scan(st.Body, c)
-	return r, w, nil
+	a := (Engine{}).AnalyzeDetailed(st, c)
+	return a.Reads, a.Writes, nil
 }
 
-func scan(lines []string, c ir.Contract) (reads, writes ir.VarSet) {
-	reads, writes = ir.VarSet{}, ir.VarSet{}
-	for _, line := range lines {
-		if m := writeRe.FindStringSubmatch(line); len(m) > 0 {
-			if _, ok := c[m[1]]; ok {
-				writes[m[1]] = true
+// AnalyzeDetailed scans shell usage and records the first body-relative span
+// for every inferred read/write. Shell has no static diagnostics of its own.
+func (Engine) AnalyzeDetailed(st *ir.Stage, c ir.Contract) engine.Analysis {
+	a := engine.Analysis{
+		Reads:      ir.VarSet{},
+		Writes:     ir.VarSet{},
+		ReadSpans:  map[string]*ir.Span{},
+		WriteSpans: map[string]*ir.Span{},
+	}
+	for i, line := range st.Body {
+		if m := writeRe.FindStringSubmatchIndex(line); len(m) > 0 {
+			name := line[m[2]:m[3]]
+			if _, ok := c[name]; ok {
+				a.Writes[name] = true
+				rememberSpan(a.WriteSpans, name, lineSpan(i, m[2], len(name)))
 			}
 		}
 		for name := range readBuiltinVars(line, c) {
-			writes[name] = true
+			a.Writes[name] = true
+			rememberSpan(a.WriteSpans, name, lineSpan(i, strings.Index(line, name), len(name)))
 		}
 		for name := range arithmeticVars(line, c) {
-			reads[name] = true
+			a.Reads[name] = true
+			rememberSpan(a.ReadSpans, name, lineSpan(i, arithmeticIndex(line, name), len(name)))
 		}
 		for _, idx := range rawRe.FindAllStringSubmatchIndex(line, -1) {
 			name := line[idx[2]:idx[3]]
-			// skip partial matches like $name inside $name2
 			if idx[3] < len(line) && isWordChar(line[idx[3]]) {
 				continue
 			}
 			if _, ok := c[name]; ok {
-				reads[name] = true
+				a.Reads[name] = true
+				rememberSpan(a.ReadSpans, name, lineSpan(i, idx[2], len(name)))
 			}
 		}
 		for _, idx := range braceRe.FindAllStringSubmatchIndex(line, -1) {
-			if _, ok := c[line[idx[2]:idx[3]]]; ok {
-				reads[line[idx[2]:idx[3]]] = true
+			name := line[idx[2]:idx[3]]
+			if _, ok := c[name]; ok {
+				a.Reads[name] = true
+				rememberSpan(a.ReadSpans, name, lineSpan(i, idx[2], len(name)))
 			}
 		}
 	}
-	return reads, writes
+	return a
+}
+
+func scan(lines []string, c ir.Contract) (reads, writes ir.VarSet) {
+	a := (Engine{}).AnalyzeDetailed(&ir.Stage{Body: lines}, c)
+	return a.Reads, a.Writes
+}
+
+func lineSpan(bodyLine, col, width int) *ir.Span {
+	if col < 0 {
+		col = 0
+	}
+	return &ir.Span{StartLine: bodyLine + 1, StartCol: col + 1,
+		EndLine: bodyLine + 1, EndCol: col + width + 1}
+}
+
+func rememberSpan(spans map[string]*ir.Span, name string, span *ir.Span) {
+	if span != nil {
+		if _, exists := spans[name]; !exists {
+			spans[name] = span
+		}
+	}
+}
+
+func arithmeticIndex(line, name string) int {
+	start := strings.Index(line, "$((")
+	if start >= 0 {
+		if p := strings.Index(line[start+3:], name); p >= 0 {
+			return start + 3 + p
+		}
+	}
+	return strings.Index(line, name)
 }
 
 // readBuiltinVars returns contract variables populated by Bash read.

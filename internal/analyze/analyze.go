@@ -145,14 +145,25 @@ func (a Analyzer) Run(p *ir.Program) Report {
 			})
 			continue
 		}
-		read, write, err := eng.Analyze(st, p.Contract)
+
+		result := engine.Analysis{}
+		if detailed, ok := eng.(engine.DetailedAnalyzer); ok {
+			result = detailed.AnalyzeDetailed(st, p.Contract)
+		} else {
+			read, write, err := eng.Analyze(st, p.Contract)
+			result.Reads, result.Writes = read, write
+			if err != nil {
+				result.Diagnostics = []ir.Diagnostic{{Msg: err.Error()}}
+			}
+		}
+		read, write := result.Reads, result.Writes
 		mergeVarSets(inferred, read, write)
 		// Reads must be satisfied by an earlier stage. The current stage's
 		// writes are merged only after this cross-stage dependency check.
 		for v := range read {
 			if _, ok := sym[v]; !ok {
 				iss = append(iss, Issue{
-					Stage: st.Index, Var: v, Line: st.StartLine,
+					Stage: st.Index, Var: v, Line: sourceLine(st, result.ReadSpans[v]),
 					Msg: fmt.Sprintf("read of %q before any write (type %s)",
 						v, p.Contract[v]),
 				})
@@ -163,16 +174,15 @@ func (a Analyzer) Run(p *ir.Program) Report {
 		for v := range write {
 			sym[v] = p.Contract[v]
 		}
-		if err != nil {
+		for _, d := range result.Diagnostics {
 			iss = append(iss, Issue{
-				Stage: st.Index, Line: st.StartLine, Msg: err.Error(),
+				Stage: st.Index, Var: d.Var, Line: sourceLine(st, d.Span), Msg: d.Msg,
 			})
 		}
 		// M12: names present in this stage's source but not inferred here
 		// as read or write may silently miss prologue injection. Suppressed
-		// when the engine errored for this stage: that error already
-		// explains the stage (no duplicate noise).
-		if err == nil {
+		// when the engine has a diagnostic for this stage.
+		if len(result.Diagnostics) == 0 {
 			for _, v := range sortedContractKeys(p.Contract) {
 				if obsStage[v] && !read[v] && !write[v] {
 					iss = append(iss, Issue{
@@ -218,6 +228,16 @@ func observedNames(st *ir.Stage, c ir.Contract) ir.VarSet {
 		}
 	}
 	return obs
+}
+
+// mergeVarSets copies every entry of srcs into dst.
+// sourceLine converts a 1-based body-relative span to the original .mac line.
+// Stage.StartLine points at the block marker, so the first body line is +1.
+func sourceLine(st *ir.Stage, span *ir.Span) int {
+	if span == nil || span.StartLine <= 0 {
+		return st.StartLine
+	}
+	return st.StartLine + span.StartLine
 }
 
 // mergeVarSets copies every entry of srcs into dst.

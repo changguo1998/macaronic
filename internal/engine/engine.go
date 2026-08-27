@@ -3,7 +3,41 @@
 // M6-M8; M3 only freezes the interface shape.
 package engine
 
-import "github.com/changguo1998/macaronic/internal/ir"
+import (
+	"fmt"
+
+	"github.com/changguo1998/macaronic/internal/ir"
+)
+
+// Analysis is the structured result of a stage analysis. Span line numbers
+// are 1-based within the stage body; Analyzer converts them to .mac lines.
+type Analysis struct {
+	Reads       ir.VarSet
+	Writes      ir.VarSet
+	ReadSpans   map[string]*ir.Span
+	WriteSpans  map[string]*ir.Span
+	Diagnostics []ir.Diagnostic
+}
+
+// DetailedAnalyzer is optionally implemented by engines that provide source
+// spans for static diagnostics. Engine keeps the legacy Analyze API so test
+// adapters and external callers remain source-compatible.
+type DetailedAnalyzer interface {
+	AnalyzeDetailed(st *ir.Stage, c ir.Contract) Analysis
+}
+
+// Error returns the first structured diagnostic as a legacy error, preserving
+// the old Analyze contract for callers that still expect error text.
+func (a Analysis) Error(st *ir.Stage) error {
+	if len(a.Diagnostics) == 0 {
+		return nil
+	}
+	d := a.Diagnostics[0]
+	if d.Span != nil && d.Span.StartLine > 0 {
+		return fmt.Errorf("%s (line %d)", d.Msg, st.StartLine+d.Span.StartLine)
+	}
+	return fmt.Errorf("%s", d.Msg)
+}
 
 // Engine is one language backend. Analyze, Emit, RunCommand and
 // ParseDiagnostics are the four operations the compile/run pipeline

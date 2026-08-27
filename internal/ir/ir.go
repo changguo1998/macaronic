@@ -38,8 +38,9 @@ type Span struct {
 	EndCol    int
 }
 
-// Diagnostic reports a compile error.
+// Diagnostic reports a compile error or warning from an engine.
 type Diagnostic struct {
+	Var  string
 	Msg  string
 	Span *Span
 }

@@ -1,0 +1,7 @@
+#!mac
+[contract]
+count = "int"
+
+#!python
+print(1)
+print(count)
