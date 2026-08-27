@@ -1,76 +1,66 @@
-# Macaronic 开发计划（阶段 2）
+# Macaronic 开发计划（阶段 3）
 
-> 阶段 2 主题：**推断/诊断增强**。阶段 1（M1–M10，MVP）已归档于
-> `archive/development-plan.md`。每个里程碑列交付物、依赖、验证命令与
-> 完成标准。
-> 测试约定：table-driven 单元测试 + golden tests + shell→python→go
-> 端到端（E2E）。
-> **固定质量闸门**（每个里程碑默认全跑）：`gofmt -l .`（无输出）、
-> `go vet ./...`、`go test ./...`；涉及锁/并发/子进程的里程碑加
-> `go test -race ./...`。下方「验证」只列里程碑专属检查。
+> 阶段 3 主题：**诊断可用性、运行可靠性与基础复合类型**。阶段 2
+>（M11–M13，推断/诊断增强）已归档于 `archive/development-plan-phase2.md`。
+> M14、M15、M16 按顺序推进，并分别独立提交。
+>
+> 测试约定：table-driven 单元测试 + golden/产物断言 + shell→python→go
+> 端到端。固定质量闸门：`gofmt -l .`（无输出）、`go vet ./...`、
+> `go test ./...`、`go test -race ./...`、`git diff --check`、
+> `npx --no-install markdownlint-cli2 docs/ examples/`。
 
-## M11 — 警告体系与既有缺口补齐
+## M14 — 静态诊断回映到原始源码
 
 - **交付物**：
-  - `internal/analyze`：`Issue` 增加 `Severity` 字段（error/warning，
-    零值为 error）；`Report.OK()` 重定义为「无 error」（warning 不
-    阻断），`check`/`build` 调用点语义同步；报告行前缀
-    `error:` / `warning:`，保持 (stage, line, var) 确定性排序；
-    程序级问题（Stage=0）不打印块号。
-  - 新 warning：契约变量未被任何块推断为读/写、且未在任何块源码
-    中出现（inferred ∪ observed 双集合判定）→「declared but unused」
-    （抓拼写错误）。
-  - 阶段 2 计划/任务文档就位，README 文档导航更新（阶段 2 现行
-    链接 + 阶段 1 归档链接）。
-- **依赖**：M1–M10（阶段 1 完成）。
-- **验证**：analyze table-driven（warning 不阻断 OK、unused 告警、
-  Stage=0 输出形态）；CLI golden：warning-only fixture `check` 与
-  `build` 均退出 0 且输出含 warning 行；error fixture（读未写）退出
-  非零。
-- **完成标准**：warning 可见但不阻断 check/build；error 路径行为
-  不变；现有测试全绿。
+  - 扩展分析结果，使 engine 能返回已知读/写变量的源码 span 和结构化
+    `ir.Diagnostic`；保留现有读写集合、warning/error 语义和排序。
+  - `Analyzer.Run` 将 stage body 的相对行号统一转换为原始 `.mac` 行号，
+    不使用生成文件 sourcemap 处理静态诊断。
+  - 读未写错误使用实际读引用位置；遮蔽、缺注解和引擎诊断使用其诊断 span；
+    无法确定位置时保持现有 stage 起始行回退。
+  - CLI 输出包含准确的 stage、原始 line 和变量信息。
+- **依赖**：M13。
+- **验证**：非首行失败构造的 table-driven/golden 测试；三引擎诊断测试；
+  CLI 断言准确原始行号、stage 和变量；全量质量闸门通过。
+- **完成标准**：静态诊断不再全部指向 stage 首行；未知 span 宁可回退，
+  不产生不可信的行号；现有 warning/error 行为不回归。
 
-## M12 — 「引用但未推断」检测
+## M15 — 现有 runner 串行执行加固
 
-- **交付物**：框架对每块对契约名做 token 级兜底扫描（原始文本，
-  含注释/字符串，轻量安全网）：名字出现在块源码（observed）但不在
-  引擎推断出的读/写集合（inferred）→ warning「读可能未注入，请人工
-  确认」。引擎 Analyze 对该块返回 error 时抑制该块的 M12 warning
-  （避免与遮蔽/缺注解错误重复上报），词法出现仍计入 observed。
-  与 unused 告警去重：仅 observed 的变量不发 unused。
-- **依赖**：M11。
-- **验证**：analyze table-driven（observed-not-inferred 告警、
-  引擎出错抑制、与 unused 去重）；CLI fixture：python 块名字仅
-  出现在字符串中 → warning 且退出 0。
-- **完成标准**：架构 §12 已知限制「推断失败→不注入→运行时未定义
-  名」前移为 check 期可见的 warning；现有三引擎已覆盖的场景不新增
-  误报。
+- **交付物**：
+  - 保持 `runner.Run` 同步 API、保序执行、首个失败即停和无 timeout 语义。
+  - 明确并覆盖退出码（包括命令不存在）、combined output、失败 stage、
+    stage 目录对齐和后续 stage 不执行。
+  - 失败时可靠保留对应 `failure.stderr`；写入失败通过现有结果/错误路径
+    暴露，不吞掉原始进程失败。
+  - CLI 端到端验证 `failure.json`、失败回映、warning-only 仍可 build/run、
+    static error 阻止执行。
+- **依赖**：M14；不引入 context、超时、重试、并发或进程树清理。
+- **验证**：runner 单元测试、真实 `check → build → run` fixtures、
+  失败现场与退出码断言、全量质量闸门通过。
+- **完成标准**：首个失败的 stage、退出码、stderr、failure.json 和回映结果
+  一致；不执行后续 stage；既有成功路径保持不变。
 
-## M13 — 逐引擎推断增强（严格限定 6 模式）
+## M16 — 基础类型一维数组跨块传递
 
-- **交付物**（每模式一个命名 golden 测试）：
-  1. **python 括号续行**：纯写判定的 RHS 引用检查跨越未闭合括号的
-     逻辑行（`v = f(\n v)` 中 v 计读）；
-  2. **python 下标写**：`v[...] = x` 记读 + 写（原地修改需要旧值，
-     必须注入 prologue）；
-  3. **python def 参数遮蔽**：`def f(v)` 契约名作函数参数记遮蔽
-     错误（对齐 go `:=` 规则，先于缺注解错误上报）；
-  4. **shell read 内建**：`read -r v` / `read v` 记写（read 是块的
-     生产者）；
-  5. **shell 算术引用**：`$((... v ...))` 记读（独立块
-     `count=$((count+1))` 必须消费前块值，避免静默重置为 0）；
-  6. **go 自增减**：`v++`/`v--` 读改写命名 golden 回归测试
-     （现有 identOp 实现已正确，不改代码）。
-- **依赖**：M11、M12。
-- **验证**：6 个命名子测试全部通过（`go test ./internal/engine/...
-  -v`）；现有 shell/python/go E2E 无回归；`go test -race ./...`
-  全绿。
-- **完成标准**：6 模式推断结果正确且 Emit 的 prologue/epilogue 随之
-  变化（新写进 epilogue、新读进 prologue）；`architecture.md` §12
-  「推断失败则不注入」条目注明现已发 M12 warning。
+- **交付物**：
+  - 契约支持 `int[]`、`float[]`、`bool[]`、`string[]` 四种一维 homogeneous
+    list；拒绝嵌套列表、对象、联合类型、nullable 和混合元素。
+  - 保持四种标量 wire format 不变；数组格式为 little-endian `uint32`
+    元素数量，后接逐元素标量编码；解码前限制元素数量，避免无界分配。
+  - codec 显式支持 `[]int64`、`[]float64`、`[]bool`、`[]string`，不以
+    reflection 或 `[]any` 作为公共行为；字符串中的 NUL 明确拒绝。
+  - 三引擎生成数组读写 plumbing；至少一个 shell→python→go 跨引擎 E2E
+    覆盖写入、读取/修改、再写入和最终 codec 值。
+- **依赖**：M15；仅在 M14/M15 稳定后接入。
+- **验证**：四种数组 round-trip、损坏数据和超大数量测试；contract 语法
+  测试；Python/Shell/Go 产物 prologue/epilogue 断言；跨引擎 E2E；全量
+  质量闸门通过。
+- **完成标准**：数组可在三引擎间安全传递；标量兼容性不变；非法/过大数据
+  明确失败；不扩展为递归类型系统。
 
 ## 里程碑依赖
 
 ```text
-M10（阶段 1）→ M11 → M12 → M13
+M13（阶段 2）→ M14 → M15 → M16
 ```

@@ -1,93 +1,76 @@
-# Macaronic 里程碑任务清单（阶段 2）
+# Macaronic 里程碑任务清单（阶段 3）
 
-> 本文件是根据 [`docs/development-plan.md`](development-plan.md)
-> （阶段 2）拆解的执行级任务清单，每个里程碑定义、依赖、交付物、
-> 验证原则均以开发计划为准。阶段 1（M1–M10）任务清单归档于
-> `archive/tasks.md`。每个任务（T-ID）粒度约 0.5–2 工时。
-
-## 任务维护约定
-
-- 每个 T-ID 对应一个具体的实现/测试动作，完成后把 `[ ]` 改为 `[x]`。
-- 每个 T 完成的标准是它自带的「验收」句；里程碑完成的标准是该节
-  T 全部打勾。
-- 开发计划中的**固定质量闸门**在每个里程碑都需通过：
-  1. `gofmt -l .` 无输出
-  2. `go vet ./...` 无输出
-  3. `go test ./...` 全绿
-  4. M13 额外加 `go test -race ./...` 全绿
-
-## 里程碑依赖（同 development-plan.md）
-
-```text
-M10（阶段 1）→ M11 → M12 → M13
-```
+> 本文件对应 [`development-plan.md`](development-plan.md)，拆解 M14–M16
+> 为执行级任务。阶段 2（M11–M13）已归档于
+> `archive/tasks-phase2.md`。每个 T-ID 完成后将 `[ ]` 改为 `[x]`。
 
 ## 进度总览
 
 | 里程碑 | 预估工作量 | 已打勾 / 总数 |
 | --- | --- | --- |
-| M11 | 4–6 工时 | 5 / 5 |
-| M12 | 3–4 工时 | 4 / 4 |
-| M13 | 6–8 工时 | 8 / 8 |
-| **M11–M13** | **约 13–18 工时** | **17 / 17** |
+| M14 | 4–6 工时 | 0 / 6 |
+| M15 | 4–6 工时 | 0 / 6 |
+| M16 | 10–16 工时 | 0 / 9 |
+| **M14–M16** | **约 18–28 工时** | **0 / 21** |
 
----
+## M14 — 静态诊断回映到原始源码
 
-## M11 — 警告体系与既有缺口补齐
+- [ ] T14.1 扩展 `ir`/engine 分析结果，携带读写变量的首个已知源码
+  span 与结构化诊断；保留现有接口语义或提供最小兼容适配。
+  验收：三引擎单元测试能返回 span/diagnostic。
+- [ ] T14.2 在 `Analyzer.Run` 统一完成 stage body 相对行号到原始 `.mac`
+  行号的转换；禁止静态诊断借用生成文件 sourcemap。
+  验收：非首行诊断映射到正确原始行。
+- [ ] T14.3 读未写错误使用实际读引用 span；遮蔽、缺注解和引擎错误使用
+  diagnostic span；未知 span 回退到 stage 起始行。
+  验收：table-driven 覆盖三种位置来源和回退。
+- [ ] T14.4 更新 CLI 报告，使 stage、原始 line、变量和消息保持确定性。
+  验收：CLI golden 断言精确输出。
+- [ ] T14.5 补充 Python/Shell/Go 非首行静态诊断回归测试。
+  验收：三引擎相关测试通过。
+- [ ] T14.6 运行 M14 固定质量闸门并创建独立提交。
+  验收：gofmt、vet、test、race、diff-check、markdownlint 全部通过。
 
-- [x] T11.1 `internal/analyze`：`Issue` 增加 `Severity` 字段
-  （error/warning，零值为 error）；报告行前缀 `error:` /
-  `warning:`；`issuePrefix` 在 Stage==0 时不打印块号。
-  验收：`go test ./internal/analyze/` golden 更新通过。
-- [x] T11.2 `Report.OK()` 重定义为「无 error」（warning 不阻断）；
-  `check`/`build` 调用点保持基于 OK。验收：error fixture 行为
-  不变（退出非零）。
-- [x] T11.3 程序级 unused 告警：契约变量不在任何块推断读/写集
-  合、且不在任何块源码词法出现集合（inferred ∪ observed）→
-  warning（Stage=0）。验收：table-driven（未用告警、仅 observed
-  不误报）。
-- [x] T11.4 CLI fixtures 与测试：warning-only `.mac` 的 `check`
-  退出 0 且输出含 warning 行；`build` 同样退出 0；error fixture
-  （读未写）退出非零。验收：`go test ./internal/cli/`。
-- [x] T11.5 文档：阶段 2 计划/任务文档就位，README 导航更新
-  （阶段 2 现行链接 + 阶段 1 归档链接）。验收：markdownlint 通过。
+## M15 — 现有 runner 串行执行加固
 
-## M12 — 「引用但未推断」检测
+- [ ] T15.1 覆盖保序执行、首个失败即停、后续 stage 不执行及 stage 目录
+  对齐。验收：runner 单元测试含 sentinel 断言。
+- [ ] T15.2 覆盖正常退出码、命令不存在和失败信号等退出码路径。
+  验收：Result/CLI 返回值与约定一致。
+- [ ] T15.3 覆盖 combined output、stdout 回调和对应 stage 的
+  `failure.stderr` 内容/路径。验收：字节级断言通过。
+- [ ] T15.4 处理 failure.stderr 写入失败：保留原始进程失败，同时通过
+  现有错误结果暴露现场写入失败。验收：不可写目录测试。
+- [ ] T15.5 补充真实 `check → build → run` CLI fixtures，验证
+  `failure.json`、失败回映、warning-only 可执行、static error 阻止运行。
+- [ ] T15.6 运行 M15 固定质量闸门并创建独立提交。
+  验收：gofmt、vet、test、race、diff-check、markdownlint 全部通过。
 
-- [x] T12.1 框架对每块对契约名做 token 级兜底扫描：observed 不在
-  inferred → warning「读可能未注入，请人工确认」。验收：
-  table-driven。
-- [x] T12.2 引擎 Analyze 对该块返回 error 时抑制该块 M12 warning；
-  词法出现仍计入 observed。验收：table-driven（遮蔽/缺注解块不
-  重复上报）。
-- [x] T12.3 与 unused 告警去重：仅 observed（未被推断）的变量不
-  发 unused warning。验收：table-driven。
-- [x] T12.4 CLI fixture：shell 块名字仅出现在字符串（无 `$` 前缀）
-  → M12 warning 且退出 0。验收：`go test ./internal/cli/`。
-  备注：python 引擎把字符串内出现视为缺注解错误，无法构造
-  纯 M12 warning，故 fixture 用 shell。
+## M16 — 基础类型一维数组跨块传递
 
-## M13 — 逐引擎推断增强（6 模式）
-
-- [x] T13.1 python 括号续行：纯写判定的 RHS 引用检查跨越未闭合
-  括号的逻辑行。验收：命名 golden 子测试通过。
-- [x] T13.2 python 下标写 `v[...] = x` 记读 + 写。验收：命名
-  golden 子测试通过。
-- [x] T13.3 python `def f(v)` 参数遮蔽错误（先于缺注解错误上
-  报）。验收：命名 golden 子测试通过。
-- [x] T13.4 shell `read -r v` / `read v` 记写。验收：命名 golden
-  子测试通过。
-- [x] T13.5 shell `$((... v ...))` 算术引用记读。验收：命名
-  golden 子测试通过。
-- [x] T13.6 go `v++`/`v--` 读改写命名 golden 回归子测试（现有
-  identOp 实现不变）。验收：子测试通过。
-- [x] T13.7 `architecture.md` §12「推断失败则不注入」条目注明
-  现已发 M12 warning。验收：markdownlint 通过。
-- [x] T13.8 全量闸门：`go test ./...` + `go test -race ./...`
-  全绿；现有 shell→python→go E2E 无回归。验收：全绿。
+- [ ] T16.1 扩展 contract/type 表示，支持且仅支持 `int[]`、`float[]`、
+  `bool[]`、`string[]`；拒绝嵌套、对象、联合、nullable 和混合类型。
+- [ ] T16.2 定义数组 wire format：little-endian `uint32` 数量 + 标量元素；
+  标量格式字节级兼容；解码前限制数量并拒绝损坏数据。
+- [ ] T16.3 codec 显式支持 `[]int64`、`[]float64`、`[]bool`、`[]string`，
+  拒绝嵌入 NUL；不引入 reflection 或 `[]any` 公共路径。
+- [ ] T16.4 增加四种数组的 round-trip、边界、损坏数据和超大数量测试。
+- [ ] T16.5 生成 Go 数组读写 plumbing，并添加 prologue/epilogue 产物断言。
+- [ ] T16.6 生成 Python 数组读写 plumbing，并添加 prologue/epilogue 产物断言。
+- [ ] T16.7 生成 Shell 数组读写 plumbing，使用 binary-safe bridge，并添加
+  产物断言。
+- [ ] T16.8 增加 shell→python→go 跨引擎 E2E，验证写入、读取/修改、再写入
+  及最终 codec 值；标量 E2E 无回归。
+- [ ] T16.9 运行 M16 固定质量闸门并创建独立提交。
+  验收：gofmt、vet、test、race、diff-check、markdownlint 全部通过。
 
 ## 依赖约束
 
-> 不新增依赖：改动限于 `internal/analyze`、
-> `internal/engine/{python,shell,golang}`、`internal/cli` 与
-> `docs/`、README；go.mod/go.sum 不变。
+```text
+M13（阶段 2）→ M14 → M15 → M16
+```
+
+- M15 不引入 timeout、context、重试、并发或进程树清理。
+- M16 不扩展为递归类型系统；标量 wire format 不变。
+- 不新增第三方依赖；优先复用现有 source map、codec、runner 和 engine
+  接口。

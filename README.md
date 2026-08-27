@@ -50,10 +50,13 @@ macaronic codec write state/count.macint int 42
 ## 文档
 
 - [`docs/architecture.md`](docs/architecture.md)：规范性架构设计
-- [`docs/development-plan.md`](docs/development-plan.md)：里程碑规划（阶段 2）
-- [`docs/tasks.md`](docs/tasks.md)：详细任务清单与进度（阶段 2）
-- [`docs/archive/development-plan.md`](docs/archive/development-plan.md)：阶段 1 里程碑规划（已完成，已归档）
-- [`docs/archive/tasks.md`](docs/archive/tasks.md)：详细任务清单与进度（已完成，已归档）
+- [`docs/development-plan.md`](docs/development-plan.md)：里程碑规划（阶段 3，M14–M16）
+- [`docs/tasks.md`](docs/tasks.md)：详细任务清单与进度（阶段 3）
+- [阶段 2 计划归档](docs/archive/development-plan-phase2.md)
+- [阶段 2 任务归档](docs/archive/tasks-phase2.md)
+- [阶段 1 计划归档](docs/archive/development-plan.md)
+- [阶段 1 任务归档](docs/archive/tasks.md)
+- [`docs/archive/tasks.md`](docs/archive/tasks.md)：阶段 1 任务清单与进度（已完成，已归档）
 
 ## 开发
 
