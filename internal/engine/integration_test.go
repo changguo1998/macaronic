@@ -101,11 +101,6 @@ func TestCrossEngineFlow(t *testing.T) {
 }
 
 func TestCrossEngineListFlow(t *testing.T) {
-	root := t.TempDir()
-	stateDir := filepath.Join(root, "state")
-	if err := os.MkdirAll(stateDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
 	binDir := t.TempDir()
 	bin := filepath.Join(binDir, "macaronic")
 	rootDir := repoRoot(t)
@@ -113,29 +108,49 @@ func TestCrossEngineListFlow(t *testing.T) {
 		t.Fatalf("go build: %v\n%s", err, out)
 	}
 	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
-	contract := ir.Contract{"values": ir.ListOf(ir.Int)}
-
-	st1 := &ir.Stage{Index: 1, Lang: "shell", StartLine: 1, Body: []string{`values=(1 2 3)`}}
-	runStage(t, shell.Engine{}, st1, root, contract, "1")
-	st2 := &ir.Stage{Index: 2, Lang: "python", StartLine: 4, Body: []string{
-		"values: list[int]",
-		"values[0] += 10",
-	}}
-	runStage(t, python.Engine{}, st2, root, contract, "2")
-	st3 := &ir.Stage{Index: 3, Lang: "go", StartLine: 8, Body: []string{"values[1] += 20"}}
-	runStage(t, golang.Engine{}, st3, root, contract, "3")
-
-	data, err := os.ReadFile(filepath.Join(stateDir, "values.macint[]"))
-	if err != nil {
-		t.Fatal(err)
+	cases := []struct {
+		name      string
+		typ       ir.BasicType
+		shellBody string
+		pyType    string
+		pyBody    string
+		goBody    string
+		want      any
+	}{
+		{"int", ir.ListOf(ir.Int), `values=(1 2 3)`, "int", "values[0] += 10", "values[1] += 20", []int64{11, 22, 3}},
+		{"float", ir.ListOf(ir.Float), `values=(1.5 2.5 3.5)`, "float", "values[0] += 1.5", "values[1] += 2.5", []float64{3, 5, 3.5}},
+		{"bool", ir.ListOf(ir.Bool), `values=(true false true)`, "bool", "values[0] = not values[0]", "values[1] = !values[1]", []bool{false, true, true}},
+		{"str", ir.ListOf(ir.Str), `values=("a" "b" "c")`, "str", `values[0] += "-py"`, `values[1] += "-go"`, []string{"a-py", "b-go", "c"}},
 	}
-	got, err := codec.Read(bytes.NewReader(data), ir.ListOf(ir.Int))
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := []int64{11, 22, 3}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("values = %#v, want %#v", got, want)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			stateDir := filepath.Join(root, "state")
+			if err := os.MkdirAll(stateDir, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			contract := ir.Contract{"values": tc.typ}
+			st1 := &ir.Stage{Index: 1, Lang: "shell", StartLine: 1, Body: []string{tc.shellBody}}
+			runStage(t, shell.Engine{}, st1, root, contract, "1")
+			st2 := &ir.Stage{Index: 2, Lang: "python", StartLine: 4, Body: []string{
+				"values: list[" + tc.pyType + "]", tc.pyBody,
+			}}
+			runStage(t, python.Engine{}, st2, root, contract, "2")
+			st3 := &ir.Stage{Index: 3, Lang: "go", StartLine: 8, Body: []string{tc.goBody}}
+			runStage(t, golang.Engine{}, st3, root, contract, "3")
+
+			data, err := os.ReadFile(filepath.Join(stateDir, "values.mac"+string(tc.typ)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := codec.Read(bytes.NewReader(data), tc.typ)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("values = %#v, want %#v", got, tc.want)
+			}
+		})
 	}
 }
 
