@@ -41,12 +41,16 @@ func assignRe(name string) *regexp.Regexp {
 		`\s*:\s*(int|float|bool|str)\s*=`)
 }
 
-// bareAssignRe matches a non-annotated assignment or augmented
-// assignment "name = ..." / "name += ..." / "name -= ..." etc.
-// Plain "=" is included but "==" is excluded (character class).
-func bareAssignRe(name string) *regexp.Regexp {
+// plainAssignRe matches a non-annotated plain assignment
+// "name = ..." (excludes "==" via character class).
+func plainAssignRe(name string) *regexp.Regexp {
+	return regexp.MustCompile(`^\s*` + regexp.QuoteMeta(name) + `\s*=[^=]`)
+}
+
+// augmentedAssignRe matches "name += ..." and friends.
+func augmentedAssignRe(name string) *regexp.Regexp {
 	return regexp.MustCompile(`^\s*` + regexp.QuoteMeta(name) +
-		`\s*(?:\+=|-=|\*=|/=|//=|%=|&=|\|=|\^=|<<=|>>=|=)[^=]`)
+		`\s*(?:\+=|-=|\*=|/=|//=|%=|&=|\|=|\^=|<<=|>>=)`)
 }
 
 // Analyze scans the block for contract-variable usage. Each contract
@@ -80,21 +84,23 @@ func (Engine) Analyze(st *ir.Stage, c ir.Contract) (ir.VarSet, ir.VarSet, error)
 			if firstRef < 0 {
 				// Sequential evaluation (architecture §6): the first
 				// occurrence decides whether this block CONSUMES v
-				// (read) or PRODUCES it (pure write). An annotated
-				// assignment whose RHS does not reference v is a
-				// producer; anything else starts by reading.
+				// (read) or PRODUCES it (pure write). Only an
+				// annotated/plain assignment whose RHS does not
+				// reference v can be a pure write; augmented
+				// assignments (x += ...) always read first.
 				firstRef = i
-				firstIsWrite = (ass.MatchString(ln) || bareAssignRe(v).MatchString(ln)) &&
+				firstIsWrite = (ass.MatchString(ln) || plainAssignRe(v).MatchString(ln)) &&
 					!rhsHasRef(ln, v)
 			}
 			if anno.MatchString(ln) {
 				hasAnno = true
 			}
-			// A write is an annotated assignment OR a bare/augmented
-			// assignment line (x = ..., x += ...) whose block declares
-			// the variable. Only annotated lines count against the
-			// missing-annotation error.
-			if ass.MatchString(ln) || bareAssignRe(v).MatchString(ln) {
+			// A write is an annotated assignment, a plain assignment
+			// (x = ...), or an augmented assignment (x += ...) whose
+			// block declares the variable. Only annotated lines count
+			// against the missing-annotation error.
+			if ass.MatchString(ln) || plainAssignRe(v).MatchString(ln) ||
+				augmentedAssignRe(v).MatchString(ln) {
 				hasWrite = true
 			}
 		}

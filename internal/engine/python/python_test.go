@@ -93,6 +93,7 @@ func TestAnalyzeReadWriteSemantics(t *testing.T) {
 		{"declare then augment", []string{"x: int", "x += 1"}, "rw"},
 		{"self-ref annotation", []string{"x: int = x + 1"}, "rw"},
 		{"declare then plain assign", []string{"x: int", "x = 5"}, "rw"},
+		{"augment before annotation", []string{"x += 1", "x: int"}, "rw"},
 		{"annotated then print", []string{"x: int = 0", "print(x)"}, "w"},
 	}
 	for _, c := range cases {
