@@ -13,9 +13,10 @@ import (
 
 // StageResult records one failing stage.
 type StageResult struct {
-	Index    int
-	ExitCode int
-	Stderr   []byte
+	Index            int
+	ExitCode         int
+	Stderr           []byte
+	FailureStderrErr error // failure.stderr persistence error, if any
 }
 
 // Result of a whole run.
@@ -44,8 +45,10 @@ func Run(args [][]string, dirs []string, stdout func([]byte)) Result {
 		}
 		if err != nil {
 			code := exitCode(err)
-			os.WriteFile(filepath.Join(c.Dir, "failure.stderr"), out, 0o644)
-			return Result{ExitCode: code, Failed: &StageResult{Index: i + 1, ExitCode: code, Stderr: out}}
+			persistErr := os.WriteFile(filepath.Join(c.Dir, "failure.stderr"), out, 0o644)
+			return Result{ExitCode: code, Failed: &StageResult{
+				Index: i + 1, ExitCode: code, Stderr: out, FailureStderrErr: persistErr,
+			}}
 		}
 	}
 	return Result{ExitCode: 0}

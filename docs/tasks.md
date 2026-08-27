@@ -9,9 +9,9 @@
 | 里程碑 | 预估工作量 | 已打勾 / 总数 |
 | --- | --- | --- |
 | M14 | 4–6 工时 | 6 / 6 |
-| M15 | 4–6 工时 | 0 / 6 |
+| M15 | 4–6 工时 | 6 / 6 |
 | M16 | 10–16 工时 | 0 / 9 |
-| **M14–M16** | **约 18–28 工时** | **6 / 21** |
+| **M14–M16** | **约 18–28 工时** | **12 / 21** |
 
 ## M14 — 静态诊断回映到原始源码
 
@@ -33,17 +33,17 @@
 
 ## M15 — 现有 runner 串行执行加固
 
-- [ ] T15.1 覆盖保序执行、首个失败即停、后续 stage 不执行及 stage 目录
+- [x] T15.1 覆盖保序执行、首个失败即停、后续 stage 不执行及 stage 目录
   对齐。验收：runner 单元测试含 sentinel 断言。
-- [ ] T15.2 覆盖正常退出码、命令不存在和失败信号等退出码路径。
+- [x] T15.2 覆盖正常退出码、命令不存在和失败信号等退出码路径。
   验收：Result/CLI 返回值与约定一致。
-- [ ] T15.3 覆盖 combined output、stdout 回调和对应 stage 的
+- [x] T15.3 覆盖 combined output、stdout 回调和对应 stage 的
   `failure.stderr` 内容/路径。验收：字节级断言通过。
-- [ ] T15.4 处理 failure.stderr 写入失败：保留原始进程失败，同时通过
+- [x] T15.4 处理 failure.stderr 写入失败：保留原始进程失败，同时通过
   现有错误结果暴露现场写入失败。验收：不可写目录测试。
-- [ ] T15.5 补充真实 `check → build → run` CLI fixtures，验证
+- [x] T15.5 补充真实 `check → build → run` CLI fixtures，验证
   `failure.json`、失败回映、warning-only 可执行、static error 阻止运行。
-- [ ] T15.6 运行 M15 固定质量闸门并创建独立提交。
+- [x] T15.6 运行 M15 固定质量闸门并创建独立提交。
   验收：gofmt、vet、test、race、diff-check、markdownlint 全部通过。
 
 ## M16 — 基础类型一维数组跨块传递

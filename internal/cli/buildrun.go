@@ -175,6 +175,7 @@ func backmapFailed(ws *emit.WS, langs []string, fr *runner.StageResult) string {
 	var b strings.Builder
 	for _, d := range diags {
 		gen, line, msg := splitDiag(d.Msg)
+		gen = filepath.Base(gen)
 		if e, ok := bm.Resolve(gen, line); ok && e.Kind == 0 {
 			b.WriteString(fmt.Sprintf(".mac: line %d: %s\n", e.SourceLine, msg))
 		} else {
