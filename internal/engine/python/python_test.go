@@ -82,6 +82,43 @@ func TestAnalyzeOK(t *testing.T) {
 	}
 }
 
+func TestAnalyzeReadWriteSemantics(t *testing.T) {
+	// Sequential-evaluation semantics (architecture §6).
+	cases := []struct {
+		name string
+		body []string
+		want string // "r", "w", "rw", "-"
+	}{
+		{"produce then augment", []string{"x: int = 0", "x += 1"}, "w"},
+		{"declare then augment", []string{"x: int", "x += 1"}, "rw"},
+		{"self-ref annotation", []string{"x: int = x + 1"}, "rw"},
+		{"annotated then print", []string{"x: int = 0", "print(x)"}, "w"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			st := stage("python", 3, c.body...)
+			reads, writes, err := (Engine{}).Analyze(st, ir.Contract{"x": ir.Int})
+			if err != nil {
+				t.Fatalf("Analyze: %v", err)
+			}
+			_, read := reads["x"]
+			_, write := writes["x"]
+			got := "-"
+			if read && write {
+				got = "rw"
+			} else if read {
+				got = "r"
+			} else if write {
+				got = "w"
+			}
+			if got != c.want {
+				t.Errorf("body %v: got %q, want %q (reads=%v writes=%v)",
+					c.body, got, c.want, reads, writes)
+			}
+		})
+	}
+}
+
 func TestAnalyzeErrorLine(t *testing.T) {
 	st := stage("python", 10, "print(count)")
 	_, _, err := (Engine{}).Analyze(st, ir.Contract{"count": ir.Int})

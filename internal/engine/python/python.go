@@ -41,6 +41,13 @@ func assignRe(name string) *regexp.Regexp {
 		`\s*:\s*(int|float|bool|str)\s*=`)
 }
 
+// bareAssignRe matches a non-annotated assignment or augmented
+// assignment "name = ..." / "name += ..." / "name -= ..." etc.
+func bareAssignRe(name string) *regexp.Regexp {
+	return regexp.MustCompile(`^\s*` + regexp.QuoteMeta(name) +
+		`\s*(?:\+=|-=|\*=|/=|//=|%=|&=|\|=|\^=|<<=|>>=)`)
+}
+
 // Analyze scans the block for contract-variable usage. Each contract
 // variable referenced anywhere must have an annotation line; a bare
 // use without annotation is a check error carrying the first used
@@ -76,12 +83,17 @@ func (Engine) Analyze(st *ir.Stage, c ir.Contract) (ir.VarSet, ir.VarSet, error)
 				// assignment whose RHS does not reference v is a
 				// producer; anything else starts by reading.
 				firstRef = i
-				firstIsWrite = ass.MatchString(ln) && !rhsHasRef(ln, v)
+				firstIsWrite = (ass.MatchString(ln) || bareAssignRe(v).MatchString(ln)) &&
+					!rhsHasRef(ln, v)
 			}
 			if anno.MatchString(ln) {
 				hasAnno = true
 			}
-			if ass.MatchString(ln) && anno.MatchString(ln) {
+			// A write is an annotated assignment OR a bare/augmented
+			// assignment line (x = ..., x += ...) whose block declares
+			// the variable. Only annotated lines count against the
+			// missing-annotation error.
+			if ass.MatchString(ln) || bareAssignRe(v).MatchString(ln) {
 				hasWrite = true
 			}
 		}

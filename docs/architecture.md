@@ -334,6 +334,9 @@ macaronic <script>   # 等价于 macaronic run <script>
   - `float`：8 字节 IEEE-754（float64）
   - `bool`：1 字节（0 / 1）
   - `str`：4 字节 little-endian 长度 + UTF-8 字节
+- **state 文件名契约**：`<var>.mac<type>`（如 `count.macint`、
+  `msg.macstr`）。**所有引擎统一**此命名，保证跨语言 state
+  互通。类型后缀 = 基本类型名（int/float/bool/str）。
 - **codec helper**：shell 块的注入读写不直接解析二进制，而调用
   macaronic 的隐藏子命令 `codec`：
   - `macaronic codec read <state-file> <type>` →
