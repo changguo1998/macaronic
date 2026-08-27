@@ -10,6 +10,7 @@ macaronic 是一个类编译的 **CLI 构建工具**：把单个混用多种编�
   `[contract]`）
 - 基本类型：`int` / `float` / `bool` / `str`；支持一维数组
   `int[]` / `float[]` / `bool[]` / `str[]`
+  `string[]` 是兼容别名，规范化为 `str[]`
 - 首批块语言：`shell` + `python` + `go`
 - 每变量一个二进制 state 文件（脚本内自洽 ABI，见
   `docs/architecture.md` §10）
