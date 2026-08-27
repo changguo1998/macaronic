@@ -90,3 +90,16 @@ func assertSet(t *testing.T, label string, got ir.VarSet, want []string) {
 		}
 	}
 }
+
+func TestAnalyzeGoIncrementDecrement(t *testing.T) {
+	c := ir.Contract{"count": ir.Int}
+	reads, writes, err := (Engine{}).Analyze(&ir.Stage{
+		Index: 1, Lang: "go", StartLine: 10, Body: []string{"count++", "count--"},
+	}, c)
+	if err != nil {
+		t.Fatalf("Analyze: %v", err)
+	}
+	if !reads["count"] || !writes["count"] {
+		t.Fatalf("reads=%v writes=%v, want increment/decrement read+write", reads, writes)
+	}
+}

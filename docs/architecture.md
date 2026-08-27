@@ -370,8 +370,9 @@ macaronic <script>   # 等价于 macaronic run <script>
 - **硬边界**：块间不共享函数/import——每块独立进程，只经
   `state/` 传数据，不传代码。
 - **已知限制**：
-  - 推断失败则不注入，可能导致运行时错误（未定义名）；
-    macaronic 的检查是「轻量静态检查」，**不承诺完全编译期安全**。
+  - 推断失败则不注入，可能导致运行时错误（未定义名）；阶段 2 的
+    check 会对「源码出现但未推断」发 warning，提示读可能未注入；
+    macaronic 的检查仍是「轻量静态检查」，**不承诺完全编译期安全**。
   - shell 块的二进制处理依赖 `macaronic codec` helper，纯 Bash
     表达力有限。
   - 固定 `<脚本名>.run/` 目录存在并发运行竞争，以 fail-fast

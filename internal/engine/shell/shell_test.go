@@ -277,3 +277,28 @@ func TestE2EShellToShell(t *testing.T) {
 		t.Errorf("out = %q", got)
 	}
 }
+
+func TestAnalyzeShellReadBuiltin(t *testing.T) {
+	for _, body := range []string{"read count", "read -r count"} {
+		t.Run(body, func(t *testing.T) {
+			reads, writes, err := (Engine{}).Analyze(testStage(body), ir.Contract{"count": ir.Int})
+			if err != nil {
+				t.Fatalf("Analyze: %v", err)
+			}
+			if reads["count"] || !writes["count"] {
+				t.Fatalf("reads=%v writes=%v, want write-only count", reads, writes)
+			}
+		})
+	}
+}
+
+func TestAnalyzeShellArithmeticReference(t *testing.T) {
+	reads, writes, err := (Engine{}).Analyze(
+		testStage("count=$((count + 1))"), ir.Contract{"count": ir.Int})
+	if err != nil {
+		t.Fatalf("Analyze: %v", err)
+	}
+	if !reads["count"] || !writes["count"] {
+		t.Fatalf("reads=%v writes=%v, want arithmetic read+write", reads, writes)
+	}
+}

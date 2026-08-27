@@ -245,3 +245,37 @@ func TestEmitSourceMap(t *testing.T) {
 		t.Errorf("orig entries = %d, want 2", orig)
 	}
 }
+
+func TestAnalyzePythonParenContinuation(t *testing.T) {
+	st := stage("python", 3,
+		"x: int = make_value(",
+		"    x",
+		")",
+	)
+	reads, writes, err := (Engine{}).Analyze(st, ir.Contract{"x": ir.Int})
+	if err != nil {
+		t.Fatalf("Analyze: %v", err)
+	}
+	if !reads["x"] || !writes["x"] {
+		t.Fatalf("reads=%v writes=%v, want continuation RHS read+write", reads, writes)
+	}
+}
+
+func TestAnalyzePythonSubscriptWrite(t *testing.T) {
+	st := stage("python", 3, "x: int", "x[0] = 1")
+	reads, writes, err := (Engine{}).Analyze(st, ir.Contract{"x": ir.Int})
+	if err != nil {
+		t.Fatalf("Analyze: %v", err)
+	}
+	if !reads["x"] || !writes["x"] {
+		t.Fatalf("reads=%v writes=%v, want subscript read+write", reads, writes)
+	}
+}
+
+func TestAnalyzePythonDefParamShadow(t *testing.T) {
+	st := stage("python", 3, "def f(x):", "    return x")
+	_, _, err := (Engine{}).Analyze(st, ir.Contract{"x": ir.Int})
+	if err == nil || !strings.Contains(err.Error(), "shadows the contract binding") {
+		t.Fatalf("err=%v, want function-parameter shadow error", err)
+	}
+}

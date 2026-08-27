@@ -53,6 +53,15 @@ func augmentedAssignRe(name string) *regexp.Regexp {
 		`\s*(?:\+=|-=|\*=|/=|//=|%=|&=|\|=|\^=|<<=|>>=)`)
 }
 
+// subscriptAssignRe matches an in-place assignment such as v[i] = x.
+// Subscript mutation consumes the old value as well as producing a new one.
+func subscriptAssignRe(name string) *regexp.Regexp {
+	return regexp.MustCompile(`^\s*` + regexp.QuoteMeta(name) +
+		`\s*\[[^]]*\]\s*=[^=]`)
+}
+
+var defStartRe = regexp.MustCompile(`^\s*def\s+[A-Za-z_][A-Za-z0-9_]*\s*\(`)
+
 // Analyze scans the block for contract-variable usage. Each contract
 // variable referenced anywhere must have an annotation line; a bare
 // use without annotation is a check error carrying the first used
@@ -69,6 +78,15 @@ func (Engine) Analyze(st *ir.Stage, c ir.Contract) (ir.VarSet, ir.VarSet, error)
 		names = append(names, v)
 	}
 	sort.Strings(names)
+	// Function parameters create local bindings. Detect contract-name
+	// parameters before the normal annotation check so shadowing wins.
+	for _, v := range names {
+		if defParamShadow(st.Body, v) {
+			return nil, nil, fmt.Errorf(
+				"python: contract variable %q used as a function parameter shadows the contract binding",
+				v)
+		}
+	}
 	for _, v := range names {
 		refRe := varRefRe(v)
 		anno := annoRe(v)
@@ -89,8 +107,9 @@ func (Engine) Analyze(st *ir.Stage, c ir.Contract) (ir.VarSet, ir.VarSet, error)
 				// reference v can be a pure write; augmented
 				// assignments (x += ...) always read first.
 				firstRef = i
+				end := logicalSpan(st.Body, i)
 				firstIsWrite = (ass.MatchString(ln) || plainAssignRe(v).MatchString(ln)) &&
-					!rhsHasRef(ln, v)
+					!rhsHasRefSpan(st.Body, i, end, v)
 			}
 			if anno.MatchString(ln) {
 				hasAnno = true
@@ -102,6 +121,11 @@ func (Engine) Analyze(st *ir.Stage, c ir.Contract) (ir.VarSet, ir.VarSet, error)
 			if ass.MatchString(ln) || plainAssignRe(v).MatchString(ln) ||
 				augmentedAssignRe(v).MatchString(ln) {
 				hasWrite = true
+			}
+			if subscriptAssignRe(v).MatchString(ln) {
+				// In-place mutation needs the pre-existing value.
+				hasWrite = true
+				reads[v] = true
 			}
 		}
 		if firstRef < 0 {
@@ -130,6 +154,92 @@ func rhsHasRef(line, v string) bool {
 		return false
 	}
 	return varRefRe(v).MatchString(line[i+1:])
+}
+
+// rhsHasRefSpan extends RHS detection across a parenthesized logical line.
+func rhsHasRefSpan(lines []string, start, end int, v string) bool {
+	if start < 0 || start >= len(lines) {
+		return false
+	}
+	i := strings.Index(lines[start], "=")
+	if i < 0 {
+		return false
+	}
+	text := lines[start][i+1:]
+	for j := start + 1; j <= end && j < len(lines); j++ {
+		text += "\n" + lines[j]
+	}
+	return varRefRe(v).MatchString(text)
+}
+
+// logicalSpan returns the final physical line of a parenthesized statement.
+func logicalSpan(lines []string, start int) int {
+	end := start
+	depth := 0
+	for ; end < len(lines); end++ {
+		depth += delimiterBalance(lines[end])
+		if depth <= 0 && end >= start {
+			return end
+		}
+	}
+	return len(lines) - 1
+}
+
+func delimiterBalance(line string) int {
+	return strings.Count(line, "(") + strings.Count(line, "[") + strings.Count(line, "{") -
+		strings.Count(line, ")") - strings.Count(line, "]") - strings.Count(line, "}")
+}
+
+// defParamShadow reports whether name is a parameter of any def statement.
+func defParamShadow(lines []string, name string) bool {
+	paramRe := regexp.MustCompile(`(?:^|,)\s*\*{0,2}` + regexp.QuoteMeta(name) + `\s*(?:,|=|:|$)`)
+	for i, line := range lines {
+		if !defStartRe.MatchString(line) {
+			continue
+		}
+		start := strings.Index(line, "(")
+		if start < 0 {
+			continue
+		}
+		end := matchingParenEnd(lines, i, start)
+		if end < 0 {
+			continue
+		}
+		text := lines[i][start+1:]
+		for j := i + 1; j <= end && j < len(lines); j++ {
+			text += "\n" + lines[j]
+		}
+		close := strings.LastIndex(text, ")")
+		if close >= 0 {
+			text = text[:close]
+		}
+		if paramRe.MatchString(text) {
+			return true
+		}
+	}
+	return false
+}
+
+func matchingParenEnd(lines []string, line, col int) int {
+	depth := 0
+	for i := line; i < len(lines); i++ {
+		text := lines[i]
+		if i == line {
+			text = text[col:]
+		}
+		for _, r := range text {
+			switch r {
+			case '(':
+				depth++
+			case ')':
+				depth--
+				if depth == 0 {
+					return i
+				}
+			}
+		}
+	}
+	return -1
 }
 
 // genFile is the emitted Python file name.

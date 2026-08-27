@@ -37,6 +37,8 @@ var rawRe = regexp.MustCompile(`\$([A-Za-z_][A-Za-z0-9_]*)`)
 // braceRe matches ${name}.
 var braceRe = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}`)
 
+var shellIdentRe = regexp.MustCompile(`[A-Za-z_][A-Za-z0-9_]*`)
+
 // isWordChar reports whether b continues an identifier.
 func isWordChar(b byte) bool {
 	return b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z' ||
@@ -62,6 +64,12 @@ func scan(lines []string, c ir.Contract) (reads, writes ir.VarSet) {
 				writes[m[1]] = true
 			}
 		}
+		for name := range readBuiltinVars(line, c) {
+			writes[name] = true
+		}
+		for name := range arithmeticVars(line, c) {
+			reads[name] = true
+		}
 		for _, idx := range rawRe.FindAllStringSubmatchIndex(line, -1) {
 			name := line[idx[2]:idx[3]]
 			// skip partial matches like $name inside $name2
@@ -79,6 +87,70 @@ func scan(lines []string, c ir.Contract) (reads, writes ir.VarSet) {
 		}
 	}
 	return reads, writes
+}
+
+// readBuiltinVars returns contract variables populated by Bash read.
+func readBuiltinVars(line string, c ir.Contract) ir.VarSet {
+	vars := ir.VarSet{}
+	t := strings.TrimSpace(line)
+	if len(t) < 4 || t[:4] != "read" || (len(t) > 4 && isWordChar(t[4])) {
+		return vars
+	}
+	fields := strings.Fields(t[4:])
+	valueFlags := map[string]bool{"a": true, "d": true, "n": true, "N": true, "p": true, "t": true, "u": true}
+	skip := false
+	for _, field := range fields {
+		if skip {
+			skip = false
+			continue
+		}
+		if strings.HasPrefix(field, "-") {
+			flag := strings.TrimPrefix(field, "-")
+			if len(flag) == 1 && valueFlags[flag] {
+				skip = true
+			}
+			continue
+		}
+		if !shellIdentRe.MatchString(field) || shellIdentRe.FindString(field) != field {
+			break
+		}
+		if _, ok := c[field]; ok {
+			vars[field] = true
+		}
+	}
+	return vars
+}
+
+// arithmeticVars finds bare contract identifiers inside $(( ... )).
+func arithmeticVars(line string, c ir.Contract) ir.VarSet {
+	vars := ir.VarSet{}
+	for start := 0; ; {
+		i := strings.Index(line[start:], "$(")
+		if i < 0 {
+			break
+		}
+		i += start
+		if i+3 > len(line) || line[i:i+3] != "$("+"(" {
+			start = i + 2
+			continue
+		}
+		end := strings.Index(line[i+3:], "))")
+		if end < 0 {
+			end = len(line) - i - 3
+		}
+		end += i + 3
+		for _, idx := range shellIdentRe.FindAllStringIndex(line[i+3:end], -1) {
+			name := line[i+3+idx[0] : i+3+idx[1]]
+			if _, ok := c[name]; ok {
+				vars[name] = true
+			}
+		}
+		if end >= len(line) {
+			break
+		}
+		start = end + 2
+	}
+	return vars
 }
 
 // Emit implements engine.Engine: writes stageDir/run.sh containing a
