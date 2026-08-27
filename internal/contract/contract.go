@@ -3,12 +3,12 @@
 package contract
 
 import (
-    "fmt"
-    "regexp"
-    "strings"
+	"fmt"
+	"regexp"
+	"strings"
 
-    "github.com/BurntSushi/toml"
-    "github.com/changguo1998/macaronic/internal/ir"
+	"github.com/BurntSushi/toml"
+	"github.com/changguo1998/macaronic/internal/ir"
 )
 
 // nameRe is the cross-language identifier rule: letters/digits/_
@@ -18,38 +18,38 @@ var nameRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 // typeNames maps contract string values to ir types.
 var typeNames = map[string]ir.BasicType{
-    "int":   ir.Int,
-    "float": ir.Float,
-    "bool":  ir.Bool,
-    "str":   ir.Str,
+	"int":   ir.Int,
+	"float": ir.Float,
+	"bool":  ir.Bool,
+	"str":   ir.Str,
 }
 
 // doc is the raw TOML shape accepted from the head block.
 type doc struct {
-    Contract map[string]string `toml:"contract"`
+	Contract map[string]string `toml:"contract"`
 }
 
 // Parse parses the head block lines into an ir.Contract. It returns
 // only ir types (a map). Iteration order of the map is undefined;
 // callers needing deterministic output must sort the keys themselves.
 func Parse(head []string) (ir.Contract, error) {
-    var d doc
-    if err := toml.Unmarshal([]byte(strings.Join(head, "\n")), &d); err != nil {
-        return nil, fmt.Errorf("head TOML: %v", err)
-    }
-    if len(d.Contract) == 0 {
-        return nil, fmt.Errorf("no [contract] table")
-    }
-    contract := ir.Contract{}
-    for name, typ := range d.Contract {
-        if !nameRe.MatchString(name) {
-            return nil, fmt.Errorf("contract key %q is not a valid identifier", name)
-        }
-        bt, ok := typeNames[typ]
-        if !ok {
-            return nil, fmt.Errorf("contract key %q has unknown type %q", name, typ)
-        }
-        contract[name] = bt
-    }
-    return contract, nil
+	var d doc
+	if err := toml.Unmarshal([]byte(strings.Join(head, "\n")), &d); err != nil {
+		return nil, fmt.Errorf("head TOML: %v", err)
+	}
+	if len(d.Contract) == 0 {
+		return nil, fmt.Errorf("no [contract] table")
+	}
+	contract := ir.Contract{}
+	for name, typ := range d.Contract {
+		if !nameRe.MatchString(name) {
+			return nil, fmt.Errorf("contract key %q is not a valid identifier", name)
+		}
+		bt, ok := typeNames[typ]
+		if !ok {
+			return nil, fmt.Errorf("contract key %q has unknown type %q", name, typ)
+		}
+		contract[name] = bt
+	}
+	return contract, nil
 }

@@ -1,25 +1,25 @@
 package golang
 
 import (
-    "fmt"
-    "os"
-    "os/exec"
-    "path/filepath"
-    "regexp"
-    "sort"
-    "strconv"
-    "strings"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"regexp"
+	"sort"
+	"strconv"
+	"strings"
 
-    "github.com/changguo1998/macaronic/internal/ir"
+	"github.com/changguo1998/macaronic/internal/ir"
 )
 
 const (
-    // binaryName is the built executable in each stage dir.
-    binaryName = "stage"
-    // goFile is the generated source name, also the sourcemap key.
-    goFile = "main.go"
-    // buildErrorsName is where Emit stores failed go build output.
-    buildErrorsName = "build-errors.txt"
+	// binaryName is the built executable in each stage dir.
+	binaryName = "stage"
+	// goFile is the generated source name, also the sourcemap key.
+	goFile = "main.go"
+	// buildErrorsName is where Emit stores failed go build output.
+	buildErrorsName = "build-errors.txt"
 )
 
 // codecHelpers is self-contained byte codec code (docs §10) injected
@@ -129,23 +129,23 @@ func mFail(err error) {
 
 // genLine is one line of generated source plus its origin tag.
 type genLine struct {
-    text string
-    src  int
-    kind ir.OriginKind
+	text string
+	src  int
+	kind ir.OriginKind
 }
 
 // stateFileName is the state file naming convention shared by all
 // engines: <name>.mac<type> (e.g. count.macint). Cross-engine state
 // interop depends on this exact form.
 func stateFileName(name string, t ir.BasicType) string {
-    return name + ".mac" + string(t)
+	return name + ".mac" + string(t)
 }
 
 // RunCommand implements engine.Engine: run.sh invokes the built
 // binary (not `go run`); the binary resolves state/ relative to its
 // own location, so cwd does not matter.
 func (Engine) RunCommand(stageDir string) []string {
-    return []string{filepath.Join(stageDir, binaryName)}
+	return []string{filepath.Join(stageDir, binaryName)}
 }
 
 // Emit implements engine.Engine: it writes main.go into stageDir,
@@ -153,200 +153,200 @@ func (Engine) RunCommand(stageDir string) []string {
 // saved to build-errors.txt on failure so the caller can run
 // ParseDiagnostics on it.
 func (e Engine) Emit(st *ir.Stage, c ir.Contract, stageDir, stateDir string,
-    sm *ir.SourceMap) error {
-    reads, writes, shadow := analyzeBody(st.Body, c)
-    if shadow != "" {
-        return fmt.Errorf("go stage%d: `:=` new binding shadows %q", st.Index, shadow)
-    }
-    if err := os.MkdirAll(stageDir, 0o755); err != nil {
-        return err
-    }
-    gl := e.generate(st, c, reads, writes)
-    mainPath := filepath.Join(stageDir, goFile)
-    if err := writeGenLines(mainPath, gl); err != nil {
-        return err
-    }
-    fillSourceMap(sm, gl)
-    return e.build(stageDir)
+	sm *ir.SourceMap) error {
+	reads, writes, shadow := analyzeBody(st.Body, c)
+	if shadow != "" {
+		return fmt.Errorf("go stage%d: `:=` new binding shadows %q", st.Index, shadow)
+	}
+	if err := os.MkdirAll(stageDir, 0o755); err != nil {
+		return err
+	}
+	gl := e.generate(st, c, reads, writes)
+	mainPath := filepath.Join(stageDir, goFile)
+	if err := writeGenLines(mainPath, gl); err != nil {
+		return err
+	}
+	fillSourceMap(sm, gl)
+	return e.build(stageDir)
 }
 
 // build compiles main.go in stageDir into the stage binary. On
 // failure it persists stderr for ParseDiagnostics and returns a
 // non-nil error.
 func (Engine) build(stageDir string) error {
-    cmd := exec.Command("go", "build", "-o", binaryName, goFile)
-    cmd.Dir = stageDir
-    out, err := cmd.CombinedOutput()
-    if err != nil {
-        _ = os.WriteFile(filepath.Join(stageDir, buildErrorsName), out, 0o644)
-        return fmt.Errorf("go build stage failed:\n%s", out)
-    }
-    return nil
+	cmd := exec.Command("go", "build", "-o", binaryName, goFile)
+	cmd.Dir = stageDir
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		_ = os.WriteFile(filepath.Join(stageDir, buildErrorsName), out, 0o644)
+		return fmt.Errorf("go build stage failed:\n%s", out)
+	}
+	return nil
 }
 
 // generate assembles the stage source, tagging each line's origin.
 func (Engine) generate(st *ir.Stage, c ir.Contract, reads, writes ir.VarSet) []genLine {
-    syn := func(text string) genLine {
-        return genLine{text: text, kind: ir.OrigSynthetic}
-    }
-    src := func(text string, line int) genLine {
-        return genLine{text: text, src: line, kind: ir.OrigSource}
-    }
-    gl := []genLine{
-        syn("package main"),
-        syn(""),
-        syn("import ("),
-        syn("\t\"fmt\""),
-        syn("\t\"math\""),
-        syn("\t\"os\""),
-        syn("\t\"path/filepath\""),
-        syn(")"),
-        syn(""),
-    }
-    for _, h := range strings.Split(strings.TrimSuffix(codecHelpers, "\n"), "\n") {
-        gl = append(gl, syn(h))
-    }
-    gl = append(gl, syn(""), syn("func main() {"))
-    if n := len(union(reads, writes)); n > 0 {
-        gl = append(gl, syn(`    stateDir := filepath.Join(filepath.Dir(os.Args[0]), "..", "state")`))
-    }
+	syn := func(text string) genLine {
+		return genLine{text: text, kind: ir.OrigSynthetic}
+	}
+	src := func(text string, line int) genLine {
+		return genLine{text: text, src: line, kind: ir.OrigSource}
+	}
+	gl := []genLine{
+		syn("package main"),
+		syn(""),
+		syn("import ("),
+		syn("\t\"fmt\""),
+		syn("\t\"math\""),
+		syn("\t\"os\""),
+		syn("\t\"path/filepath\""),
+		syn(")"),
+		syn(""),
+	}
+	for _, h := range strings.Split(strings.TrimSuffix(codecHelpers, "\n"), "\n") {
+		gl = append(gl, syn(h))
+	}
+	gl = append(gl, syn(""), syn("func main() {"))
+	if n := len(union(reads, writes)); n > 0 {
+		gl = append(gl, syn(`    stateDir := filepath.Join(filepath.Dir(os.Args[0]), "..", "state")`))
+	}
 
-    // deterministic declarations for reads ∪ writes
-    for _, n := range sortedNames(union(reads, writes)) {
-        gl = append(gl, syn(fmt.Sprintf("\tvar %s %s", n, goType(c[n]))))
-    }
+	// deterministic declarations for reads ∪ writes
+	for _, n := range sortedNames(union(reads, writes)) {
+		gl = append(gl, syn(fmt.Sprintf("\tvar %s %s", n, goType(c[n]))))
+	}
 
-    // prologue reads (type-aware)
-    for _, n := range sortedNames(reads) {
-        gl = append(gl, readStmt(n, c[n])...)
-    }
+	// prologue reads (type-aware)
+	for _, n := range sortedNames(reads) {
+		gl = append(gl, readStmt(n, c[n])...)
+	}
 
-    // user body lines, mapped 1:1 to source lines
-    for i, body := range st.Body {
-        gl = append(gl, src("\t"+body, st.StartLine+1+i))
-    }
+	// user body lines, mapped 1:1 to source lines
+	for i, body := range st.Body {
+		gl = append(gl, src("\t"+body, st.StartLine+1+i))
+	}
 
-    // epilogue writes (type-aware)
-    for _, n := range sortedNames(writes) {
-        gl = append(gl, writeStmt(n, c[n])...)
-    }
+	// epilogue writes (type-aware)
+	for _, n := range sortedNames(writes) {
+		gl = append(gl, writeStmt(n, c[n])...)
+	}
 
-    gl = append(gl, syn("}"))
-    return gl
+	gl = append(gl, syn("}"))
+	return gl
 }
 
 // readStmt emits prologue lines reading var from its state file.
 func readStmt(name string, t ir.BasicType) []genLine {
-    s := ir.OrigSynthetic
-    return []genLine{
-        {text: "\t{", kind: s},
-        {text: fmt.Sprintf("\t\tv, err := %s(filepath.Join(stateDir, %q))", readHelper(t), stateFileName(name, t)), kind: s},
-        {text: "\t\tif err != nil {", kind: s},
-        {text: "\t\t\tmFail(err)", kind: s},
-        {text: "\t\t}", kind: s},
-        {text: fmt.Sprintf("\t\t%s = v", name), kind: s},
-        {text: "\t}", kind: s},
-    }
+	s := ir.OrigSynthetic
+	return []genLine{
+		{text: "\t{", kind: s},
+		{text: fmt.Sprintf("\t\tv, err := %s(filepath.Join(stateDir, %q))", readHelper(t), stateFileName(name, t)), kind: s},
+		{text: "\t\tif err != nil {", kind: s},
+		{text: "\t\t\tmFail(err)", kind: s},
+		{text: "\t\t}", kind: s},
+		{text: fmt.Sprintf("\t\t%s = v", name), kind: s},
+		{text: "\t}", kind: s},
+	}
 }
 
 // writeStmt emits epilogue lines writing var back to its state file.
 func writeStmt(name string, t ir.BasicType) []genLine {
-    s := ir.OrigSynthetic
-    return []genLine{
-        {text: fmt.Sprintf("\tif err := %s(filepath.Join(stateDir, %q), %s); err != nil {",
-            writeHelper(t), stateFileName(name, t), name), kind: s},
-        {text: "\t\tmFail(err)", kind: s},
-        {text: "\t}", kind: s},
-    }
+	s := ir.OrigSynthetic
+	return []genLine{
+		{text: fmt.Sprintf("\tif err := %s(filepath.Join(stateDir, %q), %s); err != nil {",
+			writeHelper(t), stateFileName(name, t), name), kind: s},
+		{text: "\t\tmFail(err)", kind: s},
+		{text: "\t}", kind: s},
+	}
 }
 
 // readHelper returns the generated read function for a type.
 func readHelper(t ir.BasicType) string {
-    switch t {
-    case ir.Int:
-        return "mReadInt64"
-    case ir.Float:
-        return "mReadFloat64"
-    case ir.Bool:
-        return "mReadBool"
-    case ir.Str:
-        return "mReadStr"
-    }
-    return "mReadStr"
+	switch t {
+	case ir.Int:
+		return "mReadInt64"
+	case ir.Float:
+		return "mReadFloat64"
+	case ir.Bool:
+		return "mReadBool"
+	case ir.Str:
+		return "mReadStr"
+	}
+	return "mReadStr"
 }
 
 // writeHelper returns the generated write function for a type.
 func writeHelper(t ir.BasicType) string {
-    switch t {
-    case ir.Int:
-        return "mWriteInt64"
-    case ir.Float:
-        return "mWriteFloat64"
-    case ir.Bool:
-        return "mWriteBool"
-    case ir.Str:
-        return "mWriteStr"
-    }
-    return "mWriteStr"
+	switch t {
+	case ir.Int:
+		return "mWriteInt64"
+	case ir.Float:
+		return "mWriteFloat64"
+	case ir.Bool:
+		return "mWriteBool"
+	case ir.Str:
+		return "mWriteStr"
+	}
+	return "mWriteStr"
 }
 
 // goType maps a contract type to the Go type used in static decls.
 func goType(t ir.BasicType) string {
-    switch t {
-    case ir.Int:
-        return "int64"
-    case ir.Float:
-        return "float64"
-    case ir.Bool:
-        return "bool"
-    case ir.Str:
-        return "string"
-    }
-    return "string"
+	switch t {
+	case ir.Int:
+		return "int64"
+	case ir.Float:
+		return "float64"
+	case ir.Bool:
+		return "bool"
+	case ir.Str:
+		return "string"
+	}
+	return "string"
 }
 
 // union merges two variable sets.
 func union(a, b ir.VarSet) ir.VarSet {
-    m := ir.VarSet{}
-    for k := range a {
-        m[k] = true
-    }
-    for k := range b {
-        m[k] = true
-    }
-    return m
+	m := ir.VarSet{}
+	for k := range a {
+		m[k] = true
+	}
+	for k := range b {
+		m[k] = true
+	}
+	return m
 }
 
 // sortedNames returns set keys in sorted order.
 func sortedNames(set ir.VarSet) []string {
-    out := make([]string, 0, len(set))
-    for k := range set {
-        out = append(out, k)
-    }
-    sort.Strings(out)
-    return out
+	out := make([]string, 0, len(set))
+	for k := range set {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // writeGenLines writes the tagged line list to path.
 func writeGenLines(path string, gl []genLine) error {
-    var b strings.Builder
-    for _, l := range gl {
-        b.WriteString(l.text)
-        b.WriteString("\n")
-    }
-    return os.WriteFile(path, []byte(b.String()), 0o644)
+	var b strings.Builder
+	for _, l := range gl {
+		b.WriteString(l.text)
+		b.WriteString("\n")
+	}
+	return os.WriteFile(path, []byte(b.String()), 0o644)
 }
 
 // fillSourceMap records origin entries under "main.go:<line>".
 func fillSourceMap(sm *ir.SourceMap, gl []genLine) {
-    if *sm == nil {
-        *sm = ir.SourceMap{}
-    }
-    for i, l := range gl {
-        (*sm)[goFile+":"+strconv.Itoa(i+1)] = ir.SourceMapEntry{
-            SourceLine: l.src, Kind: l.kind,
-        }
-    }
+	if *sm == nil {
+		*sm = ir.SourceMap{}
+	}
+	for i, l := range gl {
+		(*sm)[goFile+":"+strconv.Itoa(i+1)] = ir.SourceMapEntry{
+			SourceLine: l.src, Kind: l.kind,
+		}
+	}
 }
 
 // compile diagnostics format: [./]main.go:line:col: msg
@@ -363,40 +363,40 @@ var goPanicRe = regexp.MustCompile(`^panic:\s*(.*)$`)
 // frames). Spans carry the generated line/col; the caller maps them
 // through the source map.
 func (Engine) ParseDiagnostics(stderr []byte) []ir.Diagnostic {
-    lines := strings.Split(string(stderr), "\n")
-    panicMsg := ""
-    for _, l := range lines {
-        if m := goPanicRe.FindStringSubmatch(l); m != nil {
-            panicMsg = m[1]
-            break
-        }
-    }
-    var out []ir.Diagnostic
-    for _, l := range lines {
-        if m := goCompileRe.FindStringSubmatch(l); m != nil {
-            line, _ := strconv.Atoi(m[2])
-            col, _ := strconv.Atoi(m[3])
-            msg := strings.TrimSpace(m[4])
-            if msg == "" {
-                msg = l
-            }
-            out = append(out, mkDiag(m[1], line, col, msg))
-        } else if m := goStackRe.FindStringSubmatch(l); m != nil {
-            line, _ := strconv.Atoi(m[2])
-            msg := panicMsg
-            if msg == "" {
-                msg = "runtime error"
-            }
-            out = append(out, mkDiag(m[1], line, 0, msg))
-        }
-    }
-    return out
+	lines := strings.Split(string(stderr), "\n")
+	panicMsg := ""
+	for _, l := range lines {
+		if m := goPanicRe.FindStringSubmatch(l); m != nil {
+			panicMsg = m[1]
+			break
+		}
+	}
+	var out []ir.Diagnostic
+	for _, l := range lines {
+		if m := goCompileRe.FindStringSubmatch(l); m != nil {
+			line, _ := strconv.Atoi(m[2])
+			col, _ := strconv.Atoi(m[3])
+			msg := strings.TrimSpace(m[4])
+			if msg == "" {
+				msg = l
+			}
+			out = append(out, mkDiag(m[1], line, col, msg))
+		} else if m := goStackRe.FindStringSubmatch(l); m != nil {
+			line, _ := strconv.Atoi(m[2])
+			msg := panicMsg
+			if msg == "" {
+				msg = "runtime error"
+			}
+			out = append(out, mkDiag(m[1], line, 0, msg))
+		}
+	}
+	return out
 }
 
 func mkDiag(file string, line, col int, msg string) ir.Diagnostic {
-    span := &ir.Span{StartLine: line, StartCol: col, EndLine: line, EndCol: col}
-    return ir.Diagnostic{
-        Msg:  fmt.Sprintf("%s:%d:%d: %s", file, line, col, msg),
-        Span: span,
-    }
+	span := &ir.Span{StartLine: line, StartCol: col, EndLine: line, EndCol: col}
+	return ir.Diagnostic{
+		Msg:  fmt.Sprintf("%s:%d:%d: %s", file, line, col, msg),
+		Span: span,
+	}
 }

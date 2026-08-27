@@ -5,32 +5,32 @@
 package cli
 
 import (
-    "fmt"
-    "io"
-    "os"
-    "strings"
+	"fmt"
+	"io"
+	"os"
+	"strings"
 
-    "github.com/changguo1998/macaronic/internal/analyze"
-    "github.com/changguo1998/macaronic/internal/contract"
-    "github.com/changguo1998/macaronic/internal/engine"
-    "github.com/changguo1998/macaronic/internal/ir"
-    "github.com/changguo1998/macaronic/internal/source"
+	"github.com/changguo1998/macaronic/internal/analyze"
+	"github.com/changguo1998/macaronic/internal/contract"
+	"github.com/changguo1998/macaronic/internal/engine"
+	"github.com/changguo1998/macaronic/internal/ir"
+	"github.com/changguo1998/macaronic/internal/source"
 )
 
 // subcommand names registered in M1.
 const (
-    cmdParse = "parse"
-    cmdCheck = "check"
-    cmdBuild = "build"
-    cmdRun   = "run"
-    cmdCodec = "codec"
+	cmdParse = "parse"
+	cmdCheck = "check"
+	cmdBuild = "build"
+	cmdRun   = "run"
+	cmdCodec = "codec"
 )
 
 // exit codes.
 const (
-    exitOK    = 0
-    exitFail  = 1
-    exitUsage = 2
+	exitOK    = 0
+	exitFail  = 1
+	exitUsage = 2
 )
 
 // proposalHelp marks placeholder subcommands until M2..M9 wire
@@ -60,83 +60,83 @@ const stubUsage = `%s：功能未实现
 
 // Run executes the CLI and returns the process exit code.
 func Run(args []string, stdout, stderr io.Writer) int {
-    switch {
-    case len(args) == 0:
-        fmt.Fprint(stderr, topUsage)
-        return exitUsage
-    case args[0] == "-h" || args[0] == "--help":
-        fmt.Fprint(stdout, topUsage)
-        return exitOK
-    }
+	switch {
+	case len(args) == 0:
+		fmt.Fprint(stderr, topUsage)
+		return exitUsage
+	case args[0] == "-h" || args[0] == "--help":
+		fmt.Fprint(stdout, topUsage)
+		return exitOK
+	}
 
-    name := args[0]
-    switch name {
-    case cmdParse, cmdCheck, cmdBuild, cmdRun:
-        return runSub(name, args[1:], stdout, stderr)
-    case cmdCodec:
-        return runCodec(args[1:], stdout, stderr)
-    }
+	name := args[0]
+	switch name {
+	case cmdParse, cmdCheck, cmdBuild, cmdRun:
+		return runSub(name, args[1:], stdout, stderr)
+	case cmdCodec:
+		return runCodec(args[1:], stdout, stderr)
+	}
 
-    if !looksLikeScript(name) {
-        fmt.Fprintf(stderr, "macaronic：未知子命令 %q\n\n%s", name, topUsage)
-        return exitUsage
-    }
-    // Shorthand: macaronic <script> === macaronic run <script>.
-    return runSub(cmdRun, args, stdout, stderr)
+	if !looksLikeScript(name) {
+		fmt.Fprintf(stderr, "macaronic：未知子命令 %q\n\n%s", name, topUsage)
+		return exitUsage
+	}
+	// Shorthand: macaronic <script> === macaronic run <script>.
+	return runSub(cmdRun, args, stdout, stderr)
 }
 
 // runSub validates positional args, handles -h/--help and forwards to
 // the subcommand driver.
 func runSub(name string, rest []string, stdout, stderr io.Writer) int {
-    for _, r := range rest {
-        if r == "-h" || r == "--help" {
-            fmt.Fprintf(stdout, stubUsage, name, name)
-            return exitOK
-        }
-    }
-    if len(rest) != 1 {
-        fmt.Fprintf(stderr, "macaronic：%s 恰需 1 个脚本参数，得到 %d 个\n", name, len(rest))
-        return exitUsage
-    }
-    switch name {
-    case cmdCheck:
-        return runCheck(rest[0], stdout, stderr)
-    case cmdBuild:
-        return runBuildCmd(rest[0], stdout, stderr)
-    case cmdRun:
-        return runCmd(rest[0], stdout, stderr)
-    }
-    fmt.Fprintf(stderr, "%s：%s\n", name, notImplementedMsg)
-    return exitFail
+	for _, r := range rest {
+		if r == "-h" || r == "--help" {
+			fmt.Fprintf(stdout, stubUsage, name, name)
+			return exitOK
+		}
+	}
+	if len(rest) != 1 {
+		fmt.Fprintf(stderr, "macaronic：%s 恰需 1 个脚本参数，得到 %d 个\n", name, len(rest))
+		return exitUsage
+	}
+	switch name {
+	case cmdCheck:
+		return runCheck(rest[0], stdout, stderr)
+	case cmdBuild:
+		return runBuildCmd(rest[0], stdout, stderr)
+	case cmdRun:
+		return runCmd(rest[0], stdout, stderr)
+	}
+	fmt.Fprintf(stderr, "%s：%s\n", name, notImplementedMsg)
+	return exitFail
 }
 
 // runCheck slices, parses and runs the analysis framework over one
 // script, printing the report. A non-zero exit reflects found issues.
 func runCheck(path string, stdout, stderr io.Writer) int {
-    data, err := os.ReadFile(path)
-    if err != nil {
-        fmt.Fprintf(stderr, "macaronic check: %v\n", err)
-        return exitFail
-    }
-    lines := strings.Split(strings.TrimSuffix(string(data), "\n"), "\n")
-    head, stages, err := source.Split(path, lines)
-    if err != nil {
-        fmt.Fprintf(stderr, "macaronic check: %v\n", err)
-        return exitFail
-    }
-    c, err := contract.Parse(head)
-    if err != nil {
-        fmt.Fprintf(stderr, "macaronic check: %v\n", err)
-        return exitFail
-    }
-    rep := (analyze.Analyzer{Engines: engine.Get}).Run(&ir.Program{
-        Path: path, Contract: c, Stages: stages,
-    })
-    rep.Print(stdout)
-    if rep.OK() {
-        return exitOK
-    }
-    return exitFail
+	data, err := os.ReadFile(path)
+	if err != nil {
+		fmt.Fprintf(stderr, "macaronic check: %v\n", err)
+		return exitFail
+	}
+	lines := strings.Split(strings.TrimSuffix(string(data), "\n"), "\n")
+	head, stages, err := source.Split(path, lines)
+	if err != nil {
+		fmt.Fprintf(stderr, "macaronic check: %v\n", err)
+		return exitFail
+	}
+	c, err := contract.Parse(head)
+	if err != nil {
+		fmt.Fprintf(stderr, "macaronic check: %v\n", err)
+		return exitFail
+	}
+	rep := (analyze.Analyzer{Engines: engine.Get}).Run(&ir.Program{
+		Path: path, Contract: c, Stages: stages,
+	})
+	rep.Print(stdout)
+	if rep.OK() {
+		return exitOK
+	}
+	return exitFail
 }
 
 // looksLikeScript guesses whether an unknown first arg is meant as the
@@ -144,11 +144,11 @@ func runCheck(path string, stdout, stderr io.Writer) int {
 // Heuristic: an explicit path, an extension, or presence of '/' or '.'.
 // Anything else is reported as an unknown command.
 func looksLikeScript(arg string) bool {
-    for i := 0; i < len(arg); i++ {
-        switch arg[i] {
-        case '/', '\\', '.':
-            return true
-        }
-    }
-    return false
+	for i := 0; i < len(arg); i++ {
+		switch arg[i] {
+		case '/', '\\', '.':
+			return true
+		}
+	}
+	return false
 }
