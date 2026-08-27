@@ -143,6 +143,9 @@ func runStages(ws *emit.WS, langs []string, cmds [][]string, stdout io.Writer) (
 		return nil, "", nil
 	}
 	backmapped := backmapFailed(ws, langs, res.Failed)
+	if res.Failed.FailureStderrErr != nil {
+		return res.Failed, backmapped, fmt.Errorf("persist failure.stderr: %w", res.Failed.FailureStderrErr)
+	}
 	return res.Failed, backmapped, nil
 }
 
@@ -266,15 +269,14 @@ func runCmd(path string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stdout, "%s: ok\n", filepath.Base(path))
 		return exitOK
 	}
-	if err != nil {
-		fmt.Fprintf(stderr, "macaronic run: %v\n", err)
-		return exitFail
-	}
 	// failure.json + back-mapped diagnostic
 	if werr := writeFailure(ws, fr); werr != nil {
 		fmt.Fprintf(stderr, "macaronic run: %v\n", werr)
 		return exitFail
 	}
 	fmt.Fprintf(stderr, "stage %d failed (exit %d):\n%s", fr.Index, fr.ExitCode, backmapped)
+	if err != nil {
+		fmt.Fprintf(stderr, "macaronic run: %v\n", err)
+	}
 	return exitFail
 }

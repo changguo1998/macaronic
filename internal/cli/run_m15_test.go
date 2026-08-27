@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/changguo1998/macaronic/internal/emit"
 	"github.com/changguo1998/macaronic/internal/engine"
 	golangengine "github.com/changguo1998/macaronic/internal/engine/golang"
 	pythonengine "github.com/changguo1998/macaronic/internal/engine/python"
@@ -122,5 +123,23 @@ func TestRunStaticErrorDoesNotBuild(t *testing.T) {
 	}
 	if _, err := os.Stat(strings.TrimSuffix(path, ".mac") + ".mac.run"); !os.IsNotExist(err) {
 		t.Errorf("static error created build workspace: stat error=%v", err)
+	}
+}
+
+func TestRunStagesReportsPersistenceError(t *testing.T) {
+	root := t.TempDir()
+	ws := &emit.WS{
+		Root:   root,
+		Stages: []string{filepath.Join(root, "missing-stage")},
+	}
+	fr, _, err := runStages(ws, []string{"shell"}, [][]string{{"true"}}, nil)
+	if fr == nil || err == nil {
+		t.Fatalf("fr=%+v err=%v, want process and persistence failures", fr, err)
+	}
+	if fr.ExitCode != 1 || fr.FailureStderrErr == nil {
+		t.Errorf("failed = %+v, want primary exit 1 and persistence error", fr)
+	}
+	if !strings.Contains(err.Error(), "persist failure.stderr") {
+		t.Errorf("error = %q, want persistence context", err)
 	}
 }
