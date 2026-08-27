@@ -120,6 +120,11 @@ type Analyzer struct {
 //     lexically present in any stage body -> "declared but unused"
 //     warning (typo catcher). Lexical presence is a raw-text scan, so
 //     a name inside a comment or string also counts as present.
+//
+// Per-stage warnings (M12):
+//   - a contract name present in a stage's source but not inferred as
+//     read or write in that stage -> warning that the value may not be
+//     injected (suppressed when the engine errored for that stage).
 func (a Analyzer) Run(p *ir.Program) Report {
 	var iss []Issue
 	// sym: name -> type, populated as writes are seen.
@@ -130,7 +135,8 @@ func (a Analyzer) Run(p *ir.Program) Report {
 	observed := ir.VarSet{}
 	for i := range p.Stages {
 		st := &p.Stages[i]
-		mergeVarSets(observed, observedNames(st, p.Contract))
+		obsStage := observedNames(st, p.Contract)
+		mergeVarSets(observed, obsStage)
 		eng, ok := a.Engines(st.Lang)
 		if !ok {
 			iss = append(iss, Issue{
@@ -160,6 +166,21 @@ func (a Analyzer) Run(p *ir.Program) Report {
 			iss = append(iss, Issue{
 				Stage: st.Index, Line: st.StartLine, Msg: err.Error(),
 			})
+		}
+		// M12: names present in this stage's source but not inferred here
+		// as read or write may silently miss prologue injection. Suppressed
+		// when the engine errored for this stage: that error already
+		// explains the stage (no duplicate noise).
+		if err == nil {
+			for _, v := range sortedContractKeys(p.Contract) {
+				if obsStage[v] && !read[v] && !write[v] {
+					iss = append(iss, Issue{
+						Stage: st.Index, Var: v, Line: st.StartLine,
+						Severity: SevWarning,
+						Msg:      fmt.Sprintf("contract variable %q appears in this stage's source but was not inferred as read or write; the value may not be injected - review this stage", v),
+					})
+				}
+			}
 		}
 	}
 	// Program-level unused-contract warning (deterministic key order).

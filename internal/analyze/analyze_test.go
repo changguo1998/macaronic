@@ -203,3 +203,62 @@ func TestReadBeforeWriteStillError(t *testing.T) {
 		t.Errorf("read-before-write severity = %v, want error", got.Issues[0].Severity)
 	}
 }
+
+func TestObservedNotInferredWarning(t *testing.T) {
+	// M12: count appears in the stage source but the engine inferred
+	// neither read nor write -> per-stage warning (no error).
+	p := &ir.Program{Contract: ir.Contract{"count": ir.Int}}
+	st := mkStage(1, "shell", 5)
+	st.Body = []string{"echo $count"}
+	p.Stages = append(p.Stages, *st)
+	r := mockResolver(mockEngine{name: "shell"})
+	got := (Analyzer{Engines: r}).Run(p)
+	if got.HasErrors() {
+		t.Fatalf("M12 warning must not be an error: %+v", got.Issues)
+	}
+	if len(got.Issues) != 1 {
+		t.Fatalf("issues = %+v, want exactly 1 (M12 warning)", got.Issues)
+	}
+	it := got.Issues[0]
+	if it.Stage != 1 || it.Var != "count" || it.Severity != SevWarning {
+		t.Errorf("issue = %+v, want stage-1 warning for count", it)
+	}
+	if !strings.Contains(it.Msg, "was not inferred as read or write") {
+		t.Errorf("msg = %q, want M12 wording", it.Msg)
+	}
+}
+
+func TestM12SuppressedWhenEngineErrors(t *testing.T) {
+	// M12 + M11 interaction: the engine error explains the stage, so the
+	// M12 warning is suppressed; the body mention keeps the unused
+	// warning away too. Exactly one issue: the engine error.
+	p := &ir.Program{Contract: ir.Contract{"count": ir.Int}}
+	st := mkStage(1, "python", 5)
+	st.Body = []string{"def f(count): return 1"}
+	p.Stages = append(p.Stages, *st)
+	r := mockResolver(mockEngine{name: "python", analyzeErr: errShadow("count")})
+	got := (Analyzer{Engines: r}).Run(p)
+	if len(got.Issues) != 1 {
+		t.Fatalf("issues = %+v, want exactly 1 (engine error only)", got.Issues)
+	}
+	if got.Issues[0].Severity != SevError {
+		t.Errorf("issue = %+v, want the engine error", got.Issues[0])
+	}
+}
+
+func TestM12NoWarningWhenInferred(t *testing.T) {
+	// count is observed AND inferred (read+write in the same stage:
+	// writes are recorded before the read check, so no
+	// read-before-write error) -> no M12 warning, no unused
+	// warning: clean report.
+	p := &ir.Program{Contract: ir.Contract{"count": ir.Int}}
+	st := mkStage(1, "shell", 5)
+	st.Body = []string{"echo $count"}
+	p.Stages = append(p.Stages, *st)
+	r := mockResolver(mockEngine{name: "shell", reads: ir.VarSet{"count": true},
+		writes: ir.VarSet{"count": true}})
+	got := (Analyzer{Engines: r}).Run(p)
+	if len(got.Issues) != 0 {
+		t.Errorf("issues = %+v, want none (observed and inferred)", got.Issues)
+	}
+}

@@ -27,9 +27,9 @@ M10（阶段 1）→ M11 → M12 → M13
 | 里程碑 | 预估工作量 | 已打勾 / 总数 |
 | --- | --- | --- |
 | M11 | 4–6 工时 | 5 / 5 |
-| M12 | 3–4 工时 | 0 / 4 |
+| M12 | 3–4 工时 | 4 / 4 |
 | M13 | 6–8 工时 | 0 / 8 |
-| **M11–M13** | **约 13–18 工时** | **5 / 17** |
+| **M11–M13** | **约 13–18 工时** | **9 / 17** |
 
 ---
 
@@ -54,16 +54,18 @@ M10（阶段 1）→ M11 → M12 → M13
 
 ## M12 — 「引用但未推断」检测
 
-- [ ] T12.1 框架对每块对契约名做 token 级兜底扫描：observed 不在
+- [x] T12.1 框架对每块对契约名做 token 级兜底扫描：observed 不在
   inferred → warning「读可能未注入，请人工确认」。验收：
   table-driven。
-- [ ] T12.2 引擎 Analyze 对该块返回 error 时抑制该块 M12 warning；
+- [x] T12.2 引擎 Analyze 对该块返回 error 时抑制该块 M12 warning；
   词法出现仍计入 observed。验收：table-driven（遮蔽/缺注解块不
   重复上报）。
-- [ ] T12.3 与 unused 告警去重：仅 observed（未被推断）的变量不
+- [x] T12.3 与 unused 告警去重：仅 observed（未被推断）的变量不
   发 unused warning。验收：table-driven。
-- [ ] T12.4 CLI fixture：python 块名字仅出现在字符串 → warning
-  且退出 0。验收：`go test ./internal/cli/`。
+- [x] T12.4 CLI fixture：shell 块名字仅出现在字符串（无 `$` 前缀）
+  → M12 warning 且退出 0。验收：`go test ./internal/cli/`。
+  备注：python 引擎把字符串内出现视为缺注解错误，无法构造
+  纯 M12 warning，故 fixture 用 shell。
 
 ## M13 — 逐引擎推断增强（6 模式）
 
