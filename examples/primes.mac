@@ -1,0 +1,21 @@
+#!mac
+[contract]
+count = "int"
+primes = "int[]"
+
+#!python
+limit = 1000
+sieve = [True] * (limit + 1)
+for i in range(2, int(limit ** 0.5) + 1):
+    if sieve[i]:
+        for j in range(i * i, limit + 1, i):
+            sieve[j] = False
+primes: list[int] = [i for i in range(2, limit + 1) if sieve[i]]
+count: int = len(primes)
+
+#!go
+sum := int64(0)
+for _, p := range primes {
+    sum += p
+}
+fmt.Printf("primes under 1000: count=%d sum=%d first=%d last=%d\n", count, sum, primes[0], primes[len(primes)-1])

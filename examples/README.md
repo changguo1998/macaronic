@@ -25,6 +25,24 @@ final values: count=41 total=2.5 ok=true msg=hello from shell & python
 pipeline.mac: ok
 ```
 
+## 质数筛（python → go，int[] 数组）
+
+`primes.mac`：python 用埃氏筛计算 1000 以内全部质数，写入 `count`
+（int）与 `primes`（int[]）两个契约变量，go 汇总求和并输出，
+演示一维数组 `int[]` 跨块传递。
+
+```sh
+macaronic run primes.mac
+```
+
+预期输出：
+
+```text
+primes.mac: running 2 stage(s)
+primes under 1000: count=168 sum=76127 first=2 last=997
+primes.mac: ok
+```
+
 ## 异常路径用例
 
 - `read-before-write.mac` — 未写先读：`macaronic check` 应报错。
