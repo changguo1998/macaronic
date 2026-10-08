@@ -1,77 +1,81 @@
-# Macaronic 里程碑任务清单（阶段 3）
+# Macaronic 里程碑任务清单（阶段 4）
 
-> 本文件对应 [`development-plan.md`](development-plan.md)，拆解 M14–M16
-> 为执行级任务。阶段 2（M11–M13）已归档于
-> `archive/tasks-phase2.md`。每个 T-ID 完成后将 `[ ]` 改为 `[x]`。
+> 本文件对应 [`development-plan.md`](development-plan.md)，拆解 M17–M19
+> 为执行级任务。阶段 3（M14–M16）已归档于
+> `archive/tasks-phase3.md`。每个 T-ID 完成后将 `[ ]` 改为 `[x]`。
+>
+> 方言能力以实测探针为准；凡「已实测」标注的判断，均不得凭语法知识推翻。
 
 ## 进度总览
 
 | 里程碑 | 预估工作量 | 已打勾 / 总数 |
 | --- | --- | --- |
-| M14 | 4–6 工时 | 6 / 6 |
-| M15 | 4–6 工时 | 6 / 6 |
-| M16 | 10–16 工时 | 9 / 9 |
-| **M14–M16** | **约 18–28 工时** | **21 / 21** |
+| M17 | 4–6 工时 | 0 / 6 |
+| M18 | 5–8 工时 | 0 / 6 |
+| M19 | 5–8 工时 | 0 / 5 |
+| **M17–M19** | **约 14–22 工时** | **0 / 17** |
 
-## M14 — 静态诊断回映到原始源码
+## M17 — 运行时预检与 sh 引擎
 
-- [x] T14.1 扩展 `ir`/engine 分析结果，携带读写变量的首个已知源码
-  span 与结构化诊断；保留现有接口语义或提供最小兼容适配。
-  验收：三引擎单元测试能返回 span/diagnostic。
-- [x] T14.2 在 `Analyzer.Run` 统一完成 stage body 相对行号到原始 `.mac`
-  行号的转换；禁止静态诊断借用生成文件 sourcemap。
-  验收：非首行诊断映射到正确原始行。
-- [x] T14.3 读未写错误使用实际读引用 span；遮蔽、缺注解和引擎错误使用
-  diagnostic span；未知 span 回退到 stage 起始行。
-  验收：table-driven 覆盖三种位置来源和回退。
-- [x] T14.4 更新 CLI 报告，使 stage、原始 line、变量和消息保持确定性。
-  验收：CLI golden 断言精确输出。
-- [x] T14.5 补充 Python/Bash/Go 非首行静态诊断回归测试。
-  验收：三引擎相关测试通过。
-- [x] T14.6 运行 M14 固定质量闸门并创建独立提交。
+- [ ] T17.1 `engine` 增加可选接口
+  `RuntimeChecker { RequiredCommands() []string }`，并在 `analyze.Analyzer.Run`
+  中每 stage 探测；缺失即产出 `SevError` 级 Issue（含 stage 与起始行）并跳过
+  该 stage 后续分析。验收：缺失与存在两条路径的 table-driven 测试。
+- [ ] T17.2 仅 shell 家族实现 `RuntimeChecker`，命令与各自 `RunCommand` 的
+  `argv[0]` 一致（`bash` / `sh` / `zsh` / `tcsh`）；python / go 不实现。
+  验收：断言两者一致性的测试，防止后续漂移。
+- [ ] T17.3 为 cli 层注册 shell 引擎的测试补运行时守卫，使无该方言的环境
+  以 skip 而非硬失败结束。验收：全量测试通过且守卫覆盖所有相关用例。
+- [ ] T17.4 新增 `#!sh` 引擎：`#!/bin/sh`、`set -eu`、标量 prologue/epilogue
+  走 `macaronic codec`；`RunCommand` 为 `["sh", "run.sh"]`。
+  验收：标量四类型跨块 e2e 通过。
+- [ ] T17.5 sh 的 list 契约类型在 `AnalyzeDetailed` 中产出拒绝诊断（
+  `Var` + `Span` + 消息），因此自动获得原始 `.mac` 行号并抑制该 stage 的 M12
+  警告。验收：使用 list 时 check 非零退出、行号精确、消息含类型名。
+- [ ] T17.6 运行 M17 固定质量闸门并创建独立提交。
   验收：gofmt、vet、test、race、diff-check、markdownlint 全部通过。
 
-## M15 — 现有 runner 串行执行加固
+## M18 — zsh 引擎
 
-- [x] T15.1 覆盖保序执行、首个失败即停、后续 stage 不执行及 stage 目录
-  对齐。验收：runner 单元测试含 sentinel 断言。
-- [x] T15.2 覆盖正常退出码、命令不存在和失败信号等退出码路径。
-  验收：Result/CLI 返回值与约定一致。
-- [x] T15.3 覆盖 combined output、stdout 回调和对应 stage 的
-  `failure.stderr` 内容/路径。验收：字节级断言通过。
-- [x] T15.4 处理 failure.stderr 写入失败：保留原始进程失败，同时通过
-  现有错误结果暴露现场写入失败。验收：不可写目录测试。
-- [x] T15.5 补充真实 `check → build → run` CLI fixtures，验证
-  `failure.json`、失败回映、warning-only 可执行、static error 阻止运行。
-- [x] T15.6 运行 M15 固定质量闸门并创建独立提交。
+- [ ] T18.1 新增 `#!zsh` 引擎骨架：`#!/usr/bin/env zsh`、`set -eu`、
+  `RunCommand` 为 `["zsh", "run.sh"]`、诊断正则 `^(?:\./)?([^:]+):(\d+): (.*)$`。
+  验收：非首行运行时错误回映到原始 `.mac` 行号。
+- [ ] T18.2 数组 prologue 实现：`name=()` +
+  以 `while IFS= read -r -d ''` 逐元素读入并把元素追加到同名数组，配
+  `< <(macaronic codec read-list "f" "t")`（zsh 无 `mapfile`，已实测）。
+  验收：四种数组 prologue 产物断言 + e2e。
+- [ ] T18.3 路径与类型参数一律双引号。验收：回归测试覆盖含 `[]` 的状态文件名，
+  证明不会因 `nomatch` 静默产生空数组（已实测：未引用时 `<(...)` 内失败不影响
+  外层退出码）。
+- [ ] T18.4 数组 epilogue 前插入 `(( ${+name} )) || name=()`。验收：只写不读的
+  list 在 `set -u` 下不失败，且与 bash 的 0 参数行为一致。
+- [ ] T18.5 `bash → zsh` 跨方言集成：含带空格 `str[]` 的写入、读取修改、再写入，
+  最终 codec 值正确。验收：跨引擎 E2E 通过，标量无回归。
+- [ ] T18.6 运行 M18 固定质量闸门并创建独立提交。
   验收：gofmt、vet、test、race、diff-check、markdownlint 全部通过。
 
-## M16 — 基础类型一维数组跨块传递
+## M19 — csh 引擎
 
-- [x] T16.1 扩展 contract/type 表示，支持且仅支持 `int[]`、`float[]`、
-  `bool[]`、`str[]`；`string[]` 作为兼容别名规范化为 `str[]`；拒绝嵌套、
-  对象、联合、nullable 和混合类型。
-- [x] T16.2 定义数组 wire format：little-endian `uint32` 数量 + 标量元素；
-  标量格式字节级兼容；解码前限制数量并拒绝损坏数据。
-- [x] T16.3 codec 显式支持 `[]int64`、`[]float64`、`[]bool`、`[]string`，
-  拒绝嵌入 NUL；不引入 reflection 或 `[]any` 公共路径。
-- [x] T16.4 增加四种数组的 round-trip、边界、损坏数据和超大数量测试。
-- [x] T16.5 生成 Go 数组读写 plumbing，并添加 prologue/epilogue 产物断言。
-- [x] T16.6 生成 Python 数组读写 plumbing，并添加 prologue/epilogue 产物断言。
-- [x] T16.7 生成 Bash 数组读写 plumbing，使用 binary-safe bridge，并添加
-  产物断言。
-- [x] T16.8 增加 bash→python→go 跨引擎 E2E，验证写入、读取/修改、再写入
-  及最终 codec 值；标量 E2E 无回归。
-- [x] T16.9 运行 M16 固定质量闸门并创建独立提交。
+- [ ] T19.1 新增 `#!csh` 引擎，`RunCommand` 为 `["tcsh", "-e", "run.csh"]`。
+  验收：命令失败使 stage 非零退出（对照：不加 `-e` 会继续执行并以 0 退出，已
+  实测）。
+- [ ] T19.2 标量注入：`set name = "`macaronic codec read 'f' 't'`"` 与
+  `macaronic codec write 'f' 't' "$name"`，路径与类型单引号引用以规避 `[]`
+  glob。验收：含空格 `str` 的四类型跨块 e2e 通过。
+- [ ] T19.3 csh 的 list 契约类型报 error 拒绝（同 sh）。验收：check 非零退出、
+  行号精确；理由（NUL 流按空白切分导致静默错位）写入消息或文档。
+- [ ] T19.4 `ParseDiagnostics` 返回空并注释说明；运行时失败降级为 `stage N` 加
+  原始 stderr。验收：失败用例不产生任何错误行号，且 stderr 原样呈现。
+- [ ] T19.5 运行 M19 固定质量闸门并创建独立提交。
   验收：gofmt、vet、test、race、diff-check、markdownlint 全部通过。
 
 ## 依赖约束
 
 ```text
-M13（阶段 2）→ M14 → M15 → M16
+M16（阶段 3）→ M17 → M18 → M19
 ```
 
-- M15 不引入 timeout、context、重试、并发或进程树清理。
-- M16 不扩展为递归类型系统；标量 wire format 不变。
-- 不新增第三方依赖；优先复用现有 source map、codec、runner 和 engine
-  接口。
+- 不引入共享 shell 内核；每方言独立包，接受 analyzer 逻辑重复。
+- 不新增第三方依赖；运行时探测使用标准库 `os/exec`。
+- `docs/archive/` 冻结；`IDEA.md` 不修改。
+- 方言 e2e 一律以 `exec.LookPath` 守卫，缺方言时 skip，保持 CI 可移植。

@@ -1,67 +1,109 @@
-# Macaronic 开发计划（阶段 3）
+# Macaronic 开发计划（阶段 4）
 
-> 阶段 3 主题：**诊断可用性、运行可靠性与基础复合类型**。阶段 2
->（M11–M13，推断/诊断增强）已归档于 `archive/development-plan-phase2.md`。
-> M14、M15、M16 按顺序推进，并分别独立提交。
+> 阶段 4 主题：**新增 shell 方言引擎（sh / zsh / csh）与运行时预检**。阶段 3
+> （M14–M16，诊断回映、runner 加固、一维数组）已归档于
+> `archive/development-plan-phase3.md`。M17、M18、M19 按顺序推进，并分别
+> 独立提交。
 >
-> 测试约定：table-driven 单元测试 + golden/产物断言 + bash→python→go
-> 端到端。固定质量闸门：`gofmt -l .`（无输出）、`go vet ./...`、
-> `go test ./...`、`go test -race ./...`、`git diff --check`、
+> 测试约定：table-driven 单元测试 + golden/产物断言 + 跨方言端到端。
+> 固定质量闸门：`gofmt -l .`（无输出）、`go vet ./...`、`go test ./...`、
+> `go test -race ./...`、`git diff --check`、
 > `npx --no-install markdownlint-cli2 docs/ examples/`。
+>
+> **方言能力边界以实测探针为准，不凭语法知识推断。** 探针原始结论记录在各
+> 里程碑的「实测事实」小节。
 
-## M14 — 静态诊断回映到原始源码
+## 背景：实测事实（实现前探针，环境 bash 5.2 / dash / zsh 5.9 / tcsh 6.24.13）
 
-- **交付物**：
-  - 扩展分析结果，使 engine 能返回已知读/写变量的源码 span 和结构化
-    `ir.Diagnostic`；保留现有读写集合、warning/error 语义和排序。
-  - `Analyzer.Run` 将 stage body 的相对行号统一转换为原始 `.mac` 行号，
-    不使用生成文件 sourcemap 处理静态诊断。
-  - 读未写错误使用实际读引用位置；遮蔽、缺注解和引擎诊断使用其诊断 span；
-    无法确定位置时保持现有 stage 起始行回退。
-  - CLI 输出包含准确的 stage、原始 line 和变量信息。
-- **依赖**：M13。
-- **验证**：非首行失败构造的 table-driven/golden 测试；三引擎诊断测试；
-  CLI 断言准确原始行号、stage 和变量；全量质量闸门通过。
-- **完成标准**：静态诊断不再全部指向 stage 首行；未知 span 宁可回退，
-  不产生不可信的行号；现有 warning/error 行为不回归。
+| 方言 | 标量注入 | 一维数组注入 | 报错含 `file:line` |
+| --- | --- | --- | --- |
+| bash | 可用 | `mapfile -d ''` + `<(...)` | 是（`file: line N:`） |
+| sh（dash） | 可用 | **不可能**（无数组语法、无 `<(...)`） | 是（`file: N:`） |
+| zsh | 可用 | 需 `while read -d ''` 循环 + `<(...>` | 是（`file:N:`） |
+| csh（tcsh） | 可用 | **不可靠**（NUL 流被按空白切分） | **否（无定位信息）** |
 
-## M15 — 现有 runner 串行执行加固
+关键探针证据：
 
-- **交付物**：
-  - 保持 `runner.Run` 同步 API、保序执行、首个失败即停和无 timeout 语义。
-  - 明确并覆盖退出码（包括命令不存在）、combined output、失败 stage、
-    stage 目录对齐和后续 stage 不执行。
-  - 失败时可靠保留对应 `failure.stderr`；写入失败通过现有结果/错误路径
-    暴露，不吞掉原始进程失败。
-  - CLI 端到端验证 `failure.json`、失败回映、warning-only 仍可 build/run、
-    static error 阻止执行。
-- **依赖**：M14；不引入 context、超时、重试、并发或进程树清理。
-- **验证**：runner 单元测试、真实 `check → build → run` fixtures、
-  失败现场与退出码断言、全量质量闸门通过。
-- **完成标准**：首个失败的 stage、退出码、stderr、failure.json 和回映结果
-  一致；不执行后续 stage；既有成功路径保持不变。
+- `sh`：`a=(1 2 3)` 与 `< <(...)` 均 `Syntax error`；`count=$(...)`、`${name-}`、
+  `set -eu` 正常。
+- `zsh`：无 `mapfile`；默认 `nomatch` 使未引用的 `[]` 报错，且该失败发生在
+  `<(...)` 内时**不影响外层退出码**（数组静默变空，`exit 0`）；`set -u` 下
+  引用未定义数组硬报 `parameter not set`（bash 同样输入则展开为 0 参数）。
+- `csh`：`nosuchcmd_xyz: Command not found.`、`Too many ('s.`、
+  `nope: Undefined variable.` 等 7 类错误均无文件名与行号，`-x` 仅回显命令
+  文本，手册亦无行号特性 → **运行时诊断无法回映到 `.mac` 行号**。
+- `csh`：`[]` 是 glob 元字符（`values.macint[]`、`int[]` 未引用即
+  `No match.` 且不执行命令）；标量注入
+  `set name = "`macaronic codec read 'f' 't'`"` 实测可跑通含空格 `str`。
+- `tcsh -e`（exit on any error）可恢复「首个失败即停」语义；`bsd-csh` 无 `-e`，
+  命令失败后继续执行并以 `exit 0` 结束（会把失败 stage 报成成功）。
 
-## M16 — 基础类型一维数组跨块传递
+## M17 — 运行时预检与 sh 引擎
 
 - **交付物**：
-  - 契约支持 `int[]`、`float[]`、`bool[]`、`str[]` 四种一维 homogeneous
-    list；`string[]` 仅作为兼容别名规范化为 `str[]`；拒绝嵌套、对象、联合、
-    nullable 和混合元素。
-  - 保持四种标量 wire format 不变；数组格式为 little-endian `uint32`
-    元素数量，后接逐元素标量编码；解码前限制元素数量，避免无界分配。
-  - codec 显式支持 `[]int64`、`[]float64`、`[]bool`、`[]string`，不以
-    reflection 或 `[]any` 作为公共行为；字符串中的 NUL 明确拒绝。
-  - 三引擎生成数组读写 plumbing；至少一个 bash→python→go 跨引擎 E2E
-    覆盖写入、读取/修改、再写入和最终 codec 值。
-- **依赖**：M15；仅在 M14/M15 稳定后接入。
-- **验证**：四种数组 round-trip、损坏数据和超大数量测试；contract 语法
-  测试；Python/Bash/Go 产物 prologue/epilogue 断言；跨引擎 E2E；全量
-  质量闸门通过。
-- **完成标准**：数组可在三引擎间安全传递；标量兼容性不变；非法/过大数据
-  明确失败；不扩展为递归类型系统。
+  - `engine` 增加可选接口 `RuntimeChecker { RequiredCommands() []string }`
+    （沿用 `DetailedAnalyzer` 可选接口先例，不破坏既有 mock）。
+  - `analyze.Analyzer.Run` 每 stage 探测运行时缺失，产出 `SevError` 级 Issue
+    （带 stage 与起始行）并跳过该 stage 的后续分析，使 `check` / `build` /
+    `run` 一致 fail-fast。
+  - 仅 shell 家族实现该接口：bash / sh / zsh / csh。预检命令与该方言
+    `RunCommand` 的 `argv[0]` 一致（`bash` / `sh` / `zsh` / **`tcsh`**）。
+    python / go 不实现——其端到端测试为「缺运行时则 skip」，加预检会把环境
+    受限时的跳过变成硬失败，破坏可移植性。
+  - 新增 `#!sh`：POSIX 标量读写注入；**list 契约类型在 check 阶段报 error
+    拒绝**（POSIX sh 无数组，不静默不注入）。
+- **依赖**：无（阶段 4 首个里程碑）。
+- **验证**：预检单元的缺失与存在两条路径；sh 标量跨块 e2e；sh 使用 list 时报
+  error 且行号为原始 `.mac` 行号；全量质量闸门通过。
+- **完成标准**：缺失方言在 check/build/run 三入口均以非零退出并给出含方言名
+  与所查命令的明确错误；sh 标量跨块传递正确；sh 的 list 用法被明确拒绝而非
+  静默漏注入。
+
+## M18 — zsh 引擎
+
+- **交付物**：
+  - 新增 `#!zsh`，标量与一维数组均支持。
+  - 数组 prologue 用 `while IFS= read -r -d ''` 逐元素循环读入并把元素追加
+    到同名数组，配 `< <(macaronic codec read-list ...)`（zsh 无 `mapfile`）。
+  - 路径与类型参数**必须双引号**——未引用时 `nomatch` 会让 `<(...)` 内的
+    glob 失败静默产生空数组且 `exit 0`。
+  - 数组 epilogue 前插入 `(( ${+name} )) || name=()`，消除 `set -u` 下
+    「只写不读的 list」硬失败，与 bash 的 0 参数行为持平。
+  - 诊断正则 `^(?:\./)?([^:]+):(\d+): (.*)$`（zsh 为 `file:N:` 形式）。
+- **依赖**：M17（共用预检与 `RuntimeChecker`）。
+- **验证**：zsh 标量与四种数组 e2e；`bash → zsh` 含数组的跨方言集成；
+  未定义数组与空数组两条边界；全量质量闸门通过。
+- **完成标准**：数组在 bash 与 zsh 之间双向传递正确（含带空格 `str[]`）；只写
+  不读的数组在 `set -u` 下不失败；标量无回归。
+
+## M19 — csh 引擎
+
+- **交付物**：
+  - 新增 `#!csh`，`RunCommand` 为 `tcsh -e run.csh`：`-e` 是恢复「首个失败
+    即停」语义的必要条件（`bsd-csh` 无此选项且失败后继续、以 0 退出）。
+  - 标量 prologue `set name = "`macaronic codec read 'f' 't'`"`、epilogue
+    `macaronic codec write 'f' 't' "$name"`；路径与类型以**单引号**引用以
+    规避 `[]` glob。
+  - **list 契约类型在 check 阶段报 error 拒绝**（与 sh 同一策略：NUL 流在
+    csh 中被按空白切分，`str[]` 含空格会静默错位，宁可拒绝不可静默）。
+  - `ParseDiagnostics` 返回空并在注释中说明原因（tcsh 无定位信息）；运行时
+    失败经既有 `backmapFailed` 回退为 stage 信息加原始 stderr。
+- **依赖**：M18。
+- **验证**：csh 标量跨块 e2e；csh 使用 list 时报 error 且行号正确；csh 运行时
+  失败降级为 `stage N` + 原始 stderr（不产生错误行号）；全量质量闸门通过。
+- **完成标准**：csh 标量传递正确；卡住的命令使 stage 非零退出而非静默成功；
+  **静态**诊断行号精确，**运行时**诊断明确呈现为「无行号」而非猜测行号。
 
 ## 里程碑依赖
 
 ```text
-M13（阶段 2）→ M14 → M15 → M16
+M17 → M18 → M19
 ```
+
+## 范围外（本阶段不做）
+
+- 递归与嵌套类型；map/对象类型。
+- csh 的一维数组跨块传递（探针结论：不可靠）。
+- `bash` 之外的数组下标语义归一（zsh 为 1-based，保持语言原生语义并在文档
+  说明）。
+- 为 python / go 增加运行时预检。
