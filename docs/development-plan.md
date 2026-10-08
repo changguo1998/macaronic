@@ -6,9 +6,8 @@
 >
 > 测试约定：table-driven 单元测试 + golden/产物断言 + 跨方言端到端。
 > 固定质量闸门：`gofmt -l .`（无输出）、`go vet ./...`、`go test ./...`、
-> `go test -race ./...`、`git diff --check`、
-> `npx --no-install markdownlint-cli2 docs/ examples/ README.md`
-> （M21 起该闸门由 CI 承担）。
+> `go test -race ./...`、`git diff --check`、`npm run lint:md`
+> （M21 起同一组闸门由 CI 执行）。
 >
 > **方言行为以实测探针为准，不凭语法知识推断。** 探针结论记录在下面的
 > 「实测事实」小节。
@@ -17,12 +16,12 @@
 
 | 场景 | 实测结果 |
 | --- | --- |
-| `mapfile -d '' arr < <(macaronic codec read-list 缺失文件 int[])` | 数组静默变空、脚本继续、退出码 0 |
-| 同一 `codec read-list` 直接执行 | `macaronic codec: open ...: no such file or directory`，退出码 1 |
-| bash epilogue 写未赋值的 `int`（`"${name-}"` → 空串） | codec 报 `int value "": invalid syntax`，退出码 2；信息里没有变量名 |
+| `mapfile` 经进程替换读 `read-list` | 失败被吞：数组静默变空、退出码仍为 0 |
+| 同一 `codec read-list` 直接执行 | `open ...: no such file or directory`，退出码 1 |
+| bash epilogue 写未赋值的 `int` | codec 报 `invalid syntax`，退出码 2，信息无变量名 |
+| bash epilogue 写未赋值的 `str` | 写入空字符串成功（静默，与 csh 相反） |
 | tcsh epilogue 写未赋值标量 | `count: Undefined variable.`，退出码 1（响亮） |
-| bash epilogue 写未赋值的 `str` | 成功写入空字符串（静默，与 csh 相反） |
-| `RuntimeChecker` 实现者 | 仅 bash / sh / zsh / csh；README 已声明 python / go 也 fail-fast |
+| `RuntimeChecker` 实现者 | 仅四种 shell 方言，README 却已声明六种都 fail-fast |
 
 三条结论驱动 M20：失败被进程替换吞掉（list 读）、未赋值标量跨方言行为不一致
 （`str` 静默写空）、文档声明先于实现（python / go 预检）。
@@ -53,15 +52,17 @@
 ## M21 — 持续集成
 
 - **交付物**：
-  - `.github/workflows/ci.yml`：push 与 pull_request 触发，跑
-    `gofmt -l .`（有输出即失败）、`go vet ./...`、`go test ./...`、
-    `go test -race ./...`、`git diff --check`、
-    `npx --no-install markdownlint-cli2`。
+  - `.github/workflows/ci.yml`：push 与 pull_request 触发，两个 job——
+    go（`gofmt -l .` 有输出即失败、`go vet`、`go test`、`go test -race`、
+    提交自身的空白检查 `git show --check`）与 markdownlint（`npm ci` +
+    `npm run lint:md`）。CI 额外安装 zsh 与 tcsh，让 shell 方言 e2e 真跑。
   - markdownlint 版本在仓库内锁定（`package.json` + `package-lock.json`，
-    CI 用 `npm ci`），使该闸门可复现且不依赖开发者本机装包。
+    devDependencies 精确版本），使该闸门可复现且不依赖开发者本机装包。
+  - 仓库根 `.gitignore` 增加 `node_modules/` 与 `tmp/`（后者是 AGENTS.md
+    约定的临时目录）。
 - **依赖**：M20（CI 校验 M20 的产物）。
 - **验证**：本地逐条执行 workflow 中的命令（markdownlint 用仓库锁定的
-  版本跑）；workflow YAML 语法自检。
+  版本跑，`npm run lint:md`）；workflow YAML 用 PyYAML 解析自检。
 - **完成标准**：CI 覆盖现有全部闸门，本地等价命令全过；不再有「闸门依赖人工
   记得执行」的项。
 

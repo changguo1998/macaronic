@@ -84,8 +84,11 @@ macaronic codec write-list state/values.macint[] int[] 1 2 3
 go test ./...            # 单元测试
 go test -race ./...      # 竞态检测
 gofmt -l .               # 格式
-npx --no-install markdownlint-cli2 docs/ examples/  # markdown 检查
+npm ci && npm run lint:md  # markdown 检查（版本由 package-lock.json 锁定）
 ```
+
+同一组闸门由 `.github/workflows/ci.yml` 在 push 与 pull request 上执行；
+CI 额外安装 zsh 与 tcsh，使 shell 方言的端到端用例真正运行而非跳过。
 
 语言引擎实现 `internal/engine` 下的 `engine.Engine` 接口并用
 `engine.Register` 注册（见 `cmd/macaronic/main.go`）。

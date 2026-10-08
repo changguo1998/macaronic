@@ -1,3 +1,5 @@
 .pi-glla/
 *.mac.run.lock
 *.mac.run/
+node_modules/
+tmp/

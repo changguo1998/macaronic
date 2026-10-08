@@ -1,0 +1,11 @@
+{
+  "name": "macaronic",
+  "private": true,
+  "description": "Markdown lint toolchain for the macaronic docs (CI uses npm ci).",
+  "scripts": {
+    "lint:md": "markdownlint-cli2"
+  },
+  "devDependencies": {
+    "markdownlint-cli2": "0.23.3"
+  }
+}

@@ -11,8 +11,8 @@
 | 里程碑 | 预估工作量 | 已打勾 / 总数 |
 | --- | --- | --- |
 | M20 | 4–6 工时 | 6 / 6 |
-| M21 | 2–3 工时 | 0 / 3 |
-| **M20–M21** | **约 6–9 工时** | **6 / 9** |
+| M21 | 2–3 工时 | 3 / 3 |
+| **M20–M21** | **约 6–9 工时** | **9 / 9** |
 
 ## M20 — 可靠性补齐
 
@@ -40,14 +40,15 @@
 
 ## M21 — 持续集成
 
-- [ ] T21.1 新增 `.github/workflows/ci.yml`：push 与 pull_request 触发，
-  依次跑 `gofmt -l .`（有输出即失败）、`go vet ./...`、`go test ./...`、
-  `go test -race ./...`、`git diff --check`、`markdownlint-cli2`。
-- [ ] T21.2 在仓库内锁定 markdownlint 版本（`package.json` +
-  `package-lock.json`，CI 用 `npm ci`，本地用
-  `npm exec --no -- markdownlint-cli2`）。验收：本地用仓库锁定版本跑通
-  `docs/`、`examples/`、`README.md` 且无告警。
-- [ ] T21.3 运行 M21 固定质量闸门并创建独立提交。
+- [x] T21.1 新增 `.github/workflows/ci.yml`：push 与 pull_request 触发，
+  两个 job——go（`gofmt -l .` 有输出即失败、`go vet ./...`、`go test ./...`、
+  `go test -race ./...`、`git show --check`）与 markdownlint（`npm ci` +
+  `npm run lint:md`）；CI 安装 zsh 与 tcsh 使方言 e2e 不跳过。
+- [x] T21.2 在仓库内锁定 markdownlint 版本（`package.json` +
+  `package-lock.json`，CI 用 `npm ci`，本地用 `npm run lint:md`）。验收：
+  本地用仓库锁定版本跑通 `docs/`、`examples/`、`README.md` 且 0 issue；
+  `.gitignore` 增加 `node_modules/` 与 `tmp/`。
+- [x] T21.3 运行 M21 固定质量闸门并创建独立提交。
   验收：workflow YAML 语法自检通过；workflow 中的每条命令在本地等价执行
   通过。
 
