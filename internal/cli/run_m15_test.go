@@ -10,13 +10,13 @@ import (
 
 	"github.com/changguo1998/macaronic/internal/emit"
 	"github.com/changguo1998/macaronic/internal/engine"
+	"github.com/changguo1998/macaronic/internal/engine/bash"
 	golangengine "github.com/changguo1998/macaronic/internal/engine/golang"
 	pythonengine "github.com/changguo1998/macaronic/internal/engine/python"
-	"github.com/changguo1998/macaronic/internal/engine/shell"
 )
 
 func registerAllEngines() {
-	engine.Register(shell.Engine{})
+	engine.Register(bash.Engine{})
 	engine.Register(pythonengine.Engine{})
 	engine.Register(golangengine.Engine{})
 }
@@ -132,7 +132,7 @@ func TestRunStagesReportsPersistenceError(t *testing.T) {
 		Root:   root,
 		Stages: []string{filepath.Join(root, "missing-stage")},
 	}
-	fr, _, err := runStages(ws, []string{"shell"}, [][]string{{"true"}}, nil)
+	fr, _, err := runStages(ws, []string{"bash"}, [][]string{{"true"}}, nil)
 	if fr == nil || err == nil {
 		t.Fatalf("fr=%+v err=%v, want process and persistence failures", fr, err)
 	}

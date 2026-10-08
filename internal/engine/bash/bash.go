@@ -1,9 +1,9 @@
-// Package shell implements the macaronic shell engine: it infers
+// Package bash implements the macaronic bash engine: it infers
 // contract-variable reads/writes in a Bash block and injects read and
 // write code that goes through the `macaronic codec` helper (never
 // pure Bash binary parsing, since NUL bytes are not addressable in
 // Bash).
-package shell
+package bash
 
 import (
 	"fmt"
@@ -27,7 +27,7 @@ const genFile = "run.sh"
 type Engine struct{}
 
 // Name implements engine.Engine.
-func (Engine) Name() string { return "shell" }
+func (Engine) Name() string { return "bash" }
 
 // writeRe matches a Bash assignment at line start.
 var writeRe = regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_]*)=`)
@@ -41,7 +41,7 @@ var braceRe = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}`)
 // arrayBraceRe matches ${name[@]} and ${name[index]} reads.
 var arrayBraceRe = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\[[^]]*\]\}`)
 
-var shellIdentRe = regexp.MustCompile(`[A-Za-z_][A-Za-z0-9_]*`)
+var bashIdentRe = regexp.MustCompile(`[A-Za-z_][A-Za-z0-9_]*`)
 
 // isWordChar reports whether b continues an identifier.
 func isWordChar(b byte) bool {
@@ -54,14 +54,14 @@ func isWordChar(b byte) bool {
 // Reads are $name / ${name}; writes are leading `name=...`. Only
 // contract variable names count; the contract type drives the
 // conversion (Bash itself is untyped). No shadowing to report for
-// shell (assigning a contract variable IS the intended write).
+// bash (assigning a contract variable IS the intended write).
 func (Engine) Analyze(st *ir.Stage, c ir.Contract) (ir.VarSet, ir.VarSet, error) {
 	a := (Engine{}).AnalyzeDetailed(st, c)
 	return a.Reads, a.Writes, nil
 }
 
-// AnalyzeDetailed scans shell usage and records the first body-relative span
-// for every inferred read/write. Shell has no static diagnostics of its own.
+// AnalyzeDetailed scans bash usage and records the first body-relative span
+// for every inferred read/write. Bash has no static diagnostics of its own.
 func (Engine) AnalyzeDetailed(st *ir.Stage, c ir.Contract) engine.Analysis {
 	a := engine.Analysis{
 		Reads:      ir.VarSet{},
@@ -166,7 +166,7 @@ func readBuiltinVars(line string, c ir.Contract) ir.VarSet {
 			}
 			continue
 		}
-		if !shellIdentRe.MatchString(field) || shellIdentRe.FindString(field) != field {
+		if !bashIdentRe.MatchString(field) || bashIdentRe.FindString(field) != field {
 			break
 		}
 		if _, ok := c[field]; ok {
@@ -194,7 +194,7 @@ func arithmeticVars(line string, c ir.Contract) ir.VarSet {
 			end = len(line) - i - 3
 		}
 		end += i + 3
-		for _, idx := range shellIdentRe.FindAllStringIndex(line[i+3:end], -1) {
+		for _, idx := range bashIdentRe.FindAllStringIndex(line[i+3:end], -1) {
 			name := line[i+3+idx[0] : i+3+idx[1]]
 			if _, ok := c[name]; ok {
 				vars[name] = true
@@ -233,7 +233,7 @@ func (Engine) Emit(st *ir.Stage, c ir.Contract, stageDir, stateDir string,
 	write("set -eu\n")
 	write("\n")
 
-	// Prologue: load contract variables into shell variables.
+	// Prologue: load contract variables into bash variables.
 	for _, name := range sortedVars(reads) {
 		f := filepath.Join(stateDir, stateFileName(name, c[name]))
 		if ir.IsList(c[name]) {
@@ -268,7 +268,7 @@ func (Engine) Emit(st *ir.Stage, c ir.Contract, stageDir, stateDir string,
 	}
 
 	if err := os.MkdirAll(stageDir, 0o755); err != nil {
-		return fmt.Errorf("shell emit: mkdir: %v", err)
+		return fmt.Errorf("bash emit: mkdir: %v", err)
 	}
 	return os.WriteFile(filepath.Join(stageDir, genFile), []byte(b.String()), 0o755)
 }

@@ -23,4 +23,4 @@
 
 - 块标记：`#!lang`（如 `#!python`、`#!go`；`#!mac` head 块声明跨块变量契约）
 - 跨语言衔接：每变量一个文件（脚本同目录 `<脚本名>.run/state/<var>`，二进制，脚本内自洽）
-- 实现语言：Go（首批块语言：shell + python + go）
+- 实现语言：Go（首批块语言：bash + python + go）

@@ -5,11 +5,11 @@ total = "float"
 ok = "bool"
 msg = "str"
 
-#!shell
+#!bash
 count=40
 total=2.5
 ok=true
-msg="hello from shell"
+msg="hello from bash"
 
 #!python
 count: int = count + 1

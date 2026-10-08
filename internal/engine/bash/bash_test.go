@@ -1,5 +1,5 @@
-// Package shell tests the macaronic shell engine.
-package shell
+// Package bash tests the macaronic bash engine.
+package bash
 
 import (
 	"fmt"
@@ -21,7 +21,7 @@ var testContract = ir.Contract{
 }
 
 func testStage(body ...string) *ir.Stage {
-	return &ir.Stage{Index: 1, Lang: "shell", StartLine: 10, EndLine: 10 + len(body),
+	return &ir.Stage{Index: 1, Lang: "bash", StartLine: 10, EndLine: 10 + len(body),
 		Body: body}
 }
 
@@ -172,10 +172,10 @@ func buildMacaronic(t *testing.T) (string, error) {
 	return b, nil
 }
 
-// TestE2EShellToShell runs the full inject-then-execute loop for
-// str/int/float/bool variables through two consecutive shell stages,
+// TestE2EBashToBash runs the full inject-then-execute loop for
+// str/int/float/bool variables through two consecutive bash stages,
 // using a locally built macaronic binary and a .mac.run-like layout.
-func TestE2EShellToShell(t *testing.T) {
+func TestE2EBashToBash(t *testing.T) {
 	if _, err := exec.LookPath("bash"); err != nil {
 		t.Skip("bash not available")
 	}
@@ -223,7 +223,7 @@ func TestE2EShellToShell(t *testing.T) {
 		"msg=\"$msg world\"",
 		"result=99",
 	}
-	st1 := &ir.Stage{Index: 1, Lang: "shell", StartLine: 1, EndLine: 5, Body: body1}
+	st1 := &ir.Stage{Index: 1, Lang: "bash", StartLine: 1, EndLine: 5, Body: body1}
 	if err := eng.Emit(st1, contract, stage1, stateDir, &sm); err != nil {
 		t.Fatal(err)
 	}
@@ -231,7 +231,7 @@ func TestE2EShellToShell(t *testing.T) {
 	// Stage2: read everything and emit a combined string into the
 	// contract variable "out" (only contract vars are transferred).
 	comb := []string{"out=\"count=$count;price=$price;flag=$flag;msg=$msg\""}
-	st2 := &ir.Stage{Index: 2, Lang: "shell", StartLine: 20, EndLine: 20, Body: comb}
+	st2 := &ir.Stage{Index: 2, Lang: "bash", StartLine: 20, EndLine: 20, Body: comb}
 	if err := eng.Emit(st2, contract, stage2, stateDir, &sm); err != nil {
 		t.Fatal(err)
 	}
@@ -278,7 +278,7 @@ func TestE2EShellToShell(t *testing.T) {
 	}
 }
 
-func TestAnalyzeShellReadBuiltin(t *testing.T) {
+func TestAnalyzeBashReadBuiltin(t *testing.T) {
 	for _, body := range []string{"read count", "read -r count"} {
 		t.Run(body, func(t *testing.T) {
 			reads, writes, err := (Engine{}).Analyze(testStage(body), ir.Contract{"count": ir.Int})
@@ -292,7 +292,7 @@ func TestAnalyzeShellReadBuiltin(t *testing.T) {
 	}
 }
 
-func TestAnalyzeShellArithmeticReference(t *testing.T) {
+func TestAnalyzeBashArithmeticReference(t *testing.T) {
 	reads, writes, err := (Engine{}).Analyze(
 		testStage("count=$((count + 1))"), ir.Contract{"count": ir.Int})
 	if err != nil {
@@ -303,7 +303,7 @@ func TestAnalyzeShellArithmeticReference(t *testing.T) {
 	}
 }
 
-func TestEmitShellM13ReadBuiltin(t *testing.T) {
+func TestEmitBashM13ReadBuiltin(t *testing.T) {
 	stageDir := t.TempDir()
 	st := testStage("read -r count")
 	if err := (Engine{}).Emit(st, ir.Contract{"count": ir.Int}, stageDir, t.TempDir(), nil); err != nil {
@@ -319,7 +319,7 @@ func TestEmitShellM13ReadBuiltin(t *testing.T) {
 	}
 }
 
-func TestEmitShellM13ArithmeticReference(t *testing.T) {
+func TestEmitBashM13ArithmeticReference(t *testing.T) {
 	stageDir := t.TempDir()
 	st := testStage("count=$((count + 1))")
 	if err := (Engine{}).Emit(st, ir.Contract{"count": ir.Int}, stageDir, t.TempDir(), nil); err != nil {
@@ -335,7 +335,7 @@ func TestEmitShellM13ArithmeticReference(t *testing.T) {
 	}
 }
 
-func TestEmitShellListPlumbing(t *testing.T) {
+func TestEmitBashListPlumbing(t *testing.T) {
 	stageDir := t.TempDir()
 	st := testStage(`values=("${values[@]}" 3)`)
 	c := ir.Contract{"values": ir.ListOf(ir.Int)}
@@ -348,6 +348,6 @@ func TestEmitShellListPlumbing(t *testing.T) {
 	}
 	out := string(data)
 	if !strings.Contains(out, "codec read-list") || !strings.Contains(out, "codec write-list") {
-		t.Errorf("generated shell missing list bridge:\n%s", out)
+		t.Errorf("generated bash missing list bridge:\n%s", out)
 	}
 }

@@ -15,7 +15,7 @@ const headMarker = "#!mac"
 // reported as errors. Engines are glued to these names in later
 // milestones (M6-M8).
 var allowedLangs = map[string]bool{
-	"shell":  true,
+	"bash":   true,
 	"python": true,
 	"go":     true,
 }
@@ -81,7 +81,7 @@ func Split(path string, lines []string) (head []string, stages []ir.Stage, err e
 	return head, stages, nil
 }
 
-// isMarker reports whether the line starts a block marker like "#!shell".
+// isMarker reports whether the line starts a block marker like "#!bash".
 // A line longer than 1 char starting with "#!" counts (len>=2 guard);
 // "#!" alone is treated as a marker too, and resolved as unknown lang.
 func isMarker(line string) bool {

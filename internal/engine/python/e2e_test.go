@@ -11,7 +11,7 @@ import (
 )
 
 // buildMacaronic compiles the real CLI into dir (used only for the
-// `codec` helper subcommand, standing in for the shell engine's
+// `codec` helper subcommand, standing in for the bash engine's
 // writes).
 func buildMacaronic(t *testing.T, dir string) string {
 	t.Helper()
@@ -78,7 +78,7 @@ func TestE2EPyToPy(t *testing.T) {
 	}
 }
 
-func TestE2EShellToPy(t *testing.T) {
+func TestE2EBashToPy(t *testing.T) {
 	requirePython(t)
 	binDir := t.TempDir()
 	mac := buildMacaronic(t, binDir)
@@ -88,12 +88,12 @@ func TestE2EShellToPy(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// shell side (via real codec helper) writes count:int and msg:str
+	// bash side (via real codec helper) writes count:int and msg:str
 	for _, kv := range []struct {
 		file, typ, val string
 	}{
 		{"count.macint", "int", "7"},
-		{"msg.macstr", "str", "shell-ok"},
+		{"msg.macstr", "str", "bash-ok"},
 	} {
 		bb := exec.Command(mac, "codec", "write",
 			filepath.Join(stateDir, kv.file), kv.typ, kv.val)
@@ -120,8 +120,8 @@ func TestE2EShellToPy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("run: %v\n%s", err, out)
 	}
-	if out != "7 shell-ok" {
-		t.Errorf("output = %q, want %q", out, "7 shell-ok")
+	if out != "7 bash-ok" {
+		t.Errorf("output = %q, want %q", out, "7 bash-ok")
 	}
 }
 

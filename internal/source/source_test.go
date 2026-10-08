@@ -20,11 +20,11 @@ func TestSplitHeadRules(t *testing.T) {
 		src  string
 		want string // substring of error; "" = expect success
 	}{
-		{"head missing", "#!shell\nfoo\n", "must be the first line"},
-		{"head not top", "#!shell\n#!mac\nfoo\n", "must be the first line"},
+		{"head missing", "#!bash\nfoo\n", "must be the first line"},
+		{"head not top", "#!bash\n#!mac\nfoo\n", "must be the first line"},
 		{"duplicate head", "#!mac\n[contract]\ncount = \"int\"\n#!mac\n", "duplicate #!mac"},
 		{"empty file", "", "empty file"},
-		{"marker only", "#!mac\n#!shell\n", ""},
+		{"marker only", "#!mac\n#!bash\n", ""},
 		{"unknown lang", "#!mac\n[contract]\n#!ruby\n", "unknown block language"},
 	}
 	for _, c := range cases {
@@ -46,7 +46,7 @@ func TestSplitAndContent(t *testing.T) {
 		"[contract]\n" +
 		"count = \"int\"\n" +
 		"\n" +
-		"#!shell\n" +
+		"#!bash\n" +
 		"count=$(wc -l < data.txt)\n" +
 		"echo done\n" +
 		"\n" +
@@ -66,7 +66,7 @@ func TestSplitAndContent(t *testing.T) {
 		t.Fatalf("stages len = %d, want 2", len(stages))
 	}
 	s1, s2 := stages[0], stages[1]
-	if s1.Lang != "shell" || s1.StartLine != 5 || s1.EndLine != 8 {
+	if s1.Lang != "bash" || s1.StartLine != 5 || s1.EndLine != 8 {
 		t.Errorf("stage1 = %+v", s1)
 	}
 	if got := strings.Join(s1.Body, "\n"); got != "count=$(wc -l < data.txt)\necho done\n" {
@@ -81,7 +81,7 @@ func TestSplitAndContent(t *testing.T) {
 }
 
 func TestEmptyAndTrailingBlocks(t *testing.T) {
-	src := "#!mac\n#!shell\n#!python\nx=1\n#!go\n" // shell empty, python body, go empty+EOF
+	src := "#!mac\n#!bash\n#!python\nx=1\n#!go\n" // bash empty, python body, go empty+EOF
 	_, stages, err := Split("t.mac", lineString(src))
 	if err != nil {
 		t.Fatal(err)
@@ -89,7 +89,7 @@ func TestEmptyAndTrailingBlocks(t *testing.T) {
 	if len(stages) != 3 {
 		t.Fatalf("stages len = %d, want 3", len(stages))
 	}
-	if len(stages[0].Body) != 0 || stages[0].Lang != "shell" {
+	if len(stages[0].Body) != 0 || stages[0].Lang != "bash" {
 		t.Errorf("stage1 = %+v", stages[0])
 	}
 	if len(stages[2].Body) != 0 || stages[2].Lang != "go" {

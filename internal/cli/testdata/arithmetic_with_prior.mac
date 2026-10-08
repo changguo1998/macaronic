@@ -2,8 +2,8 @@
 [contract]
 count = "int"
 
-#!shell
+#!bash
 count=1
 
-#!shell
+#!bash
 count=$((count + 1))

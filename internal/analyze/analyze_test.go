@@ -6,9 +6,9 @@ import (
 	"testing"
 
 	"github.com/changguo1998/macaronic/internal/engine"
+	bashengine "github.com/changguo1998/macaronic/internal/engine/bash"
 	golangengine "github.com/changguo1998/macaronic/internal/engine/golang"
 	pythonengine "github.com/changguo1998/macaronic/internal/engine/python"
-	shellengine "github.com/changguo1998/macaronic/internal/engine/shell"
 	"github.com/changguo1998/macaronic/internal/ir"
 )
 
@@ -51,8 +51,8 @@ func errShadow(v string) error {
 
 func TestReadBeforeWrite(t *testing.T) {
 	p := &ir.Program{Contract: ir.Contract{"count": ir.Int}}
-	p.Stages = append(p.Stages, *mkStage(1, "shell", 5))
-	r := mockResolver(mockEngine{name: "shell", reads: ir.VarSet{"count": true}})
+	p.Stages = append(p.Stages, *mkStage(1, "bash", 5))
+	r := mockResolver(mockEngine{name: "bash", reads: ir.VarSet{"count": true}})
 	got := (Analyzer{Engines: r}).Run(p)
 	if len(got.Issues) != 1 {
 		t.Fatalf("issues = %+v, want 1", got.Issues)
@@ -69,10 +69,10 @@ func TestReadBeforeWrite(t *testing.T) {
 
 func TestOverwriteOK(t *testing.T) {
 	p := &ir.Program{Contract: ir.Contract{"count": ir.Int}}
-	sh := mockEngine{name: "shell", writes: ir.VarSet{"count": true}}
+	bashEng := mockEngine{name: "bash", writes: ir.VarSet{"count": true}}
 	py := mockEngine{name: "python", reads: ir.VarSet{"count": true}, writes: ir.VarSet{"count": true}}
-	p.Stages = append(p.Stages, *mkStage(1, "shell", 5), *mkStage(2, "python", 9))
-	got := (Analyzer{Engines: mockResolver(sh, py)}).Run(p)
+	p.Stages = append(p.Stages, *mkStage(1, "bash", 5), *mkStage(2, "python", 9))
+	got := (Analyzer{Engines: mockResolver(bashEng, py)}).Run(p)
 	if !got.OK() {
 		t.Errorf("multiple writers should be OK, issues = %+v", got.Issues)
 	}
@@ -80,10 +80,10 @@ func TestOverwriteOK(t *testing.T) {
 
 func TestMultiWriterNotConflict(t *testing.T) {
 	p := &ir.Program{Contract: ir.Contract{"x": ir.Int}}
-	p.Stages = append(p.Stages, *mkStage(1, "shell", 5), *mkStage(2, "shell", 9))
+	p.Stages = append(p.Stages, *mkStage(1, "bash", 5), *mkStage(2, "bash", 9))
 	r := mockResolver(
-		mockEngine{name: "shell", writes: ir.VarSet{"x": true}},
-		mockEngine{name: "shell", writes: ir.VarSet{"x": true}},
+		mockEngine{name: "bash", writes: ir.VarSet{"x": true}},
+		mockEngine{name: "bash", writes: ir.VarSet{"x": true}},
 	)
 	// both writers: overwrite is fine
 	got := (Analyzer{Engines: r}).Run(p)
@@ -166,8 +166,8 @@ func TestUnusedContractWarning(t *testing.T) {
 	// total is neither inferred by the stage nor lexically present ->
 	// program-level unused warning; count is written -> no issue.
 	p := &ir.Program{Contract: ir.Contract{"count": ir.Int, "total": ir.Float}}
-	p.Stages = append(p.Stages, *mkStage(1, "shell", 5))
-	r := mockResolver(mockEngine{name: "shell", writes: ir.VarSet{"count": true}})
+	p.Stages = append(p.Stages, *mkStage(1, "bash", 5))
+	r := mockResolver(mockEngine{name: "bash", writes: ir.VarSet{"count": true}})
 	got := (Analyzer{Engines: r}).Run(p)
 	if got.HasErrors() {
 		t.Fatalf("unused warning must not be an error: %+v", got.Issues)
@@ -188,10 +188,10 @@ func TestObservedNotUnused(t *testing.T) {
 	// total only appears in the body (comment) but is not inferred:
 	// lexical presence suppresses the unused warning (over-approximation).
 	p := &ir.Program{Contract: ir.Contract{"total": ir.Float}}
-	st := mkStage(1, "shell", 5)
+	st := mkStage(1, "bash", 5)
 	st.Body = []string{"# total is handled elsewhere"}
 	p.Stages = append(p.Stages, *st)
-	r := mockResolver(mockEngine{name: "shell"})
+	r := mockResolver(mockEngine{name: "bash"})
 	got := (Analyzer{Engines: r}).Run(p)
 	for _, it := range got.Issues {
 		if it.Var == "total" && strings.Contains(it.Msg, "declared but never") {
@@ -202,8 +202,8 @@ func TestObservedNotUnused(t *testing.T) {
 
 func TestReadBeforeWriteStillError(t *testing.T) {
 	p := &ir.Program{Contract: ir.Contract{"count": ir.Int}}
-	p.Stages = append(p.Stages, *mkStage(1, "shell", 5))
-	r := mockResolver(mockEngine{name: "shell", reads: ir.VarSet{"count": true}})
+	p.Stages = append(p.Stages, *mkStage(1, "bash", 5))
+	r := mockResolver(mockEngine{name: "bash", reads: ir.VarSet{"count": true}})
 	got := (Analyzer{Engines: r}).Run(p)
 	if !got.HasErrors() {
 		t.Fatalf("read-before-write must remain a blocking error: %+v", got.Issues)
@@ -217,10 +217,10 @@ func TestObservedNotInferredWarning(t *testing.T) {
 	// M12: count appears in the stage source but the engine inferred
 	// neither read nor write -> per-stage warning (no error).
 	p := &ir.Program{Contract: ir.Contract{"count": ir.Int}}
-	st := mkStage(1, "shell", 5)
+	st := mkStage(1, "bash", 5)
 	st.Body = []string{"echo $count"}
 	p.Stages = append(p.Stages, *st)
-	r := mockResolver(mockEngine{name: "shell"})
+	r := mockResolver(mockEngine{name: "bash"})
 	got := (Analyzer{Engines: r}).Run(p)
 	if got.HasErrors() {
 		t.Fatalf("M12 warning must not be an error: %+v", got.Issues)
@@ -304,7 +304,7 @@ func TestDetailedDiagnosticsMapToSourceLines(t *testing.T) {
 		want    int
 		varName string
 	}{
-		{"shell read", shellengine.Engine{}, []string{"echo ready", "echo $count"}, 7, "count"},
+		{"bash read", bashengine.Engine{}, []string{"echo ready", "echo $count"}, 7, "count"},
 		{"python annotation", pythonengine.Engine{}, []string{"print(1)", "print(count)"}, 7, "count"},
 		{"go shadow", golangengine.Engine{}, []string{"// spacer", "count := 1"}, 7, "count"},
 	}

@@ -4,7 +4,7 @@
 >（M11–M13，推断/诊断增强）已归档于 `archive/development-plan-phase2.md`。
 > M14、M15、M16 按顺序推进，并分别独立提交。
 >
-> 测试约定：table-driven 单元测试 + golden/产物断言 + shell→python→go
+> 测试约定：table-driven 单元测试 + golden/产物断言 + bash→python→go
 > 端到端。固定质量闸门：`gofmt -l .`（无输出）、`go vet ./...`、
 > `go test ./...`、`go test -race ./...`、`git diff --check`、
 > `npx --no-install markdownlint-cli2 docs/ examples/`。
@@ -51,11 +51,11 @@
     元素数量，后接逐元素标量编码；解码前限制元素数量，避免无界分配。
   - codec 显式支持 `[]int64`、`[]float64`、`[]bool`、`[]string`，不以
     reflection 或 `[]any` 作为公共行为；字符串中的 NUL 明确拒绝。
-  - 三引擎生成数组读写 plumbing；至少一个 shell→python→go 跨引擎 E2E
+  - 三引擎生成数组读写 plumbing；至少一个 bash→python→go 跨引擎 E2E
     覆盖写入、读取/修改、再写入和最终 codec 值。
 - **依赖**：M15；仅在 M14/M15 稳定后接入。
 - **验证**：四种数组 round-trip、损坏数据和超大数量测试；contract 语法
-  测试；Python/Shell/Go 产物 prologue/epilogue 断言；跨引擎 E2E；全量
+  测试；Python/Bash/Go 产物 prologue/epilogue 断言；跨引擎 E2E；全量
   质量闸门通过。
 - **完成标准**：数组可在三引擎间安全传递；标量兼容性不变；非法/过大数据
   明确失败；不扩展为递归类型系统。

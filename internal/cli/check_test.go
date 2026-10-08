@@ -41,8 +41,8 @@ func writeFile(t *testing.T, name, content string) string {
 }
 
 func TestCheckGoodFile(t *testing.T) {
-	engine.Register(checkMock{namese: "shell", writeVars: ir.VarSet{"count": true}})
-	path := writeFile(t, "ok.mac", "#!mac\n[contract]\ncount = \"int\"\n\n#!shell\ncount=$(wc -l < data.txt)\n")
+	engine.Register(checkMock{namese: "bash", writeVars: ir.VarSet{"count": true}})
+	path := writeFile(t, "ok.mac", "#!mac\n[contract]\ncount = \"int\"\n\n#!bash\ncount=$(wc -l < data.txt)\n")
 
 	var out, err strings.Builder
 	if code := Run([]string{"check", path}, &out, &err); code != exitOK {

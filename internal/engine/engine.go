@@ -1,5 +1,5 @@
 // Package engine defines the macaronic language engine interface and
-// the built-in registry. Actual shell/python/go engines arrive in
+// the built-in registry. Actual bash/python/go engines arrive in
 // M6-M8; M3 only freezes the interface shape.
 package engine
 
@@ -43,7 +43,7 @@ func (a Analysis) Error(st *ir.Stage) error {
 // ParseDiagnostics are the four operations the compile/run pipeline
 // needs; see docs/architecture.md §8.
 type Engine interface {
-	// Name returns the block language id ("shell", "python", "go").
+	// Name returns the block language id ("bash", "python", "go").
 	Name() string
 
 	// Analyze runs intra-block type propagation and returns the sets

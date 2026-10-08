@@ -17,10 +17,10 @@ macaronic 是一个类编译的 **CLI 构建工具**：把单个混用多种编�
 - 块标记 `#!lang`；`#!mac` head 块声明跨块变量契约
   （TOML `[contract]`）
 - 基本类型：`int` / `float` / `bool` / `str`
-- 首批块语言：`shell` + `python` + `go`
+- 首批块语言：`bash` + `python` + `go`
 - 传输介质：每变量一个文件（二进制，脚本内自洽）
 - 顺序执行（并行推迟）
-- **运行环境**：Unix-like OS；`#!shell` 即 Bash；Python 块需
+- **运行环境**：Unix-like OS；`#!bash` 即 Bash；Python 块需
   Python 3 运行时；Go 块需 Go 工具链。Windows 不在范围。
 
 ### 非目标
@@ -53,7 +53,7 @@ macaronic 是一个类编译的 **CLI 构建工具**：把单个混用多种编�
 count = "int"
 total = "float"
 
-#!shell
+#!bash
 count=$(wc -l < data.txt)
 
 #!python
@@ -64,7 +64,7 @@ total: float = count * 1.5
 println(total)
 ```
 
-语义：shell 块写 `count` → python 块声明读 `count`、写 `total` →
+语义：bash 块写 `count` → python 块声明读 `count`、写 `total` →
 go 块读 `total` 并打印。各块的读写代码由 macaronic 自动注入，用户
 只写业务逻辑。
 
@@ -78,7 +78,7 @@ go 块读 `total` 并打印。各块的读写代码由 macaronic 自动注入，
 - Python 块内契约变量**必须带类型注解**（`count: int`、
   `total: float`）；检测到引用契约变量却缺注解 → **check 阶段报错**
   （不是警告，也不静默不注入）。
-- 无类型块（shell）以契约表声明的类型为准读写转换。
+- 无类型块（bash）以契约表声明的类型为准读写转换。
 
 ## 3. 编译流水线
 
@@ -128,7 +128,7 @@ type VarSet map[string]bool
 
 type Stage struct {
     Index     int    // 阶段序号，从 1 起
-    Lang      string // shell / python / go
+    Lang      string // bash / python / go
     Source    []string
     StartLine int    // 块首在 .mac 中的行号
     ReadSet   VarSet
@@ -199,7 +199,7 @@ internal/analyze/        语言无关的推断框架：符号表、类型集合�
                          读写推断、依赖校验
 internal/plan/           ExecutionPlan：顺序执行计划（MVP）
 internal/codec/          二进制编码（脚本内 ABI，§10）
-internal/engine/         Engine 接口 + shell / python / golang
+internal/engine/         Engine 接口 + bash / python / golang
                          实现（含报错解析）
 internal/emit/           注入读写、落盘、run.sh、source-map 生成
 internal/runner/         子进程调度、退出码、错误回映
@@ -279,7 +279,7 @@ run.sh 失败报告：
 
 ```go
 type Engine interface {
-    Name() string // shell / python / go
+    Name() string // bash / python / go
 
     // Analyze 做块内类型传播，返回本块读/写的契约变量集合。
     Analyze(st *ir.Stage, c ir.Contract) (readSet, writeSet ir.VarSet,
@@ -301,8 +301,8 @@ type Engine interface {
 
 各语言职责：
 
-- **shell**：无类型，以契约类型为准读写转换。Bash 不能安全持有
-  任意二进制（含 NUL 字节），因此 shell 块注入的读写**调用
+- **bash**：无类型，以契约类型为准读写转换。Bash 不能安全持有
+  任意二进制（含 NUL 字节），因此 bash 块注入的读写**调用
   codec helper**（§10），不承诺纯 Bash 直接解析二进制。
 - **python**：契约变量须带类型注解（缺注解 = check 报错）；
   prologue 读文件赋值、epilogue 写回文件，读写走 codec。
@@ -341,7 +341,7 @@ macaronic <script>   # 等价于 macaronic run <script>
 - **state 文件名契约**：`<var>.mac<type>`（如 `count.macint`、
   `msg.macstr`、`values.macint[]`）。**所有引擎统一**此命名，保证跨语言
   state 互通。类型后缀 = canonical 契约类型名。
-- **codec helper**：shell 块的注入读写不直接解析二进制，而调用
+- **codec helper**：bash 块的注入读写不直接解析二进制，而调用
   macaronic 的隐藏子命令 `codec`：
   - `macaronic codec read <state-file> <type>` → 输出人类可读值
   - `macaronic codec write <state-file> <type> <value>` → 写标量二进制
@@ -349,7 +349,7 @@ macaronic <script>   # 等价于 macaronic run <script>
     输出
   - `macaronic codec write-list <state-file> <list-type> <value>...` → 按 argv
     元素写入数组；字符串元素拒绝 NUL
-  生成的 shell list prologue/epilogue 使用 NUL 分隔读取和 argv 写入；
+  生成的 bash list prologue/epilogue 使用 NUL 分隔读取和 argv 写入；
   Python/Go 引擎直接内嵌同一 codec。
 
 ## 11. 错误模型与源映射
@@ -378,7 +378,7 @@ macaronic <script>   # 等价于 macaronic run <script>
   - 推断失败则不注入，可能导致运行时错误（未定义名）；阶段 2 的
     check 会对「源码出现但未推断」发 warning，提示读可能未注入；
     macaronic 的检查仍是「轻量静态检查」，**不承诺完全编译期安全**。
-  - shell 块的二进制处理依赖 `macaronic codec` helper，纯 Bash
+  - bash 块的二进制处理依赖 `macaronic codec` helper，纯 Bash
     表达力有限。
   - 固定 `<脚本名>.run/` 目录存在并发运行竞争，以 fail-fast
     排他锁规避。

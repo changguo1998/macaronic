@@ -11,7 +11,7 @@ macaronic 是一个类编译的 **CLI 构建工具**：把单个混用多种编�
 - 基本类型：`int` / `float` / `bool` / `str`；支持一维数组
   `int[]` / `float[]` / `bool[]` / `str[]`
   `string[]` 是兼容别名，规范化为 `str[]`
-- 首批块语言：`shell` + `python` + `go`
+- 首批块语言：`bash` + `python` + `go`
 - 每变量一个二进制 state 文件（脚本内自洽 ABI，见
   `docs/architecture.md` §10）
 - 顺序执行；失败即停并保留现场（`failure.json`）
@@ -23,7 +23,7 @@ macaronic 是一个类编译的 **CLI 构建工具**：把单个混用多种编�
 go build -o /usr/local/bin/macaronic ./cmd/macaronic
 ```
 
-依赖：Go 工具链 ≥ 1.22；运行 `#!shell` 需 Bash、`#!python` 块需
+依赖：Go 工具链 ≥ 1.22；运行 `#!bash` 需 Bash、`#!python` 块需
 Python 3、`#!go` 块需相同 Go 工具链。macaronic 自身需在 `PATH`
 中（生成的脚本通过 `macaronic codec` 读写状态文件）。
 

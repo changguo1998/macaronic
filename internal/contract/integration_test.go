@@ -18,7 +18,7 @@ count = "int"
 total = "float"
 msg = "str"
 
-#!shell
+#!bash
 count=$(wc -l < data.txt)
 total=$(wc -w < data.txt)
 
@@ -67,7 +67,7 @@ _ = "placeholder until M8"
 	if n := len(stages); n != 3 {
 		t.Fatalf("stages = %d, want 3", n)
 	}
-	if stages[0].Lang != "shell" || stages[1].Lang != "python" || stages[2].Lang != "go" {
+	if stages[0].Lang != "bash" || stages[1].Lang != "python" || stages[2].Lang != "go" {
 		t.Errorf("stage langs = %+v", stages)
 	}
 }

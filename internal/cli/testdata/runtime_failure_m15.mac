@@ -2,7 +2,7 @@
 [contract]
 count = "int"
 
-#!shell
+#!bash
 count=3
 
 #!python

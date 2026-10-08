@@ -53,7 +53,7 @@ type VarSet map[string]bool
 // Stage holds one source block.
 type Stage struct {
 	Index     int      // insertion order, 1-based
-	Lang      string   // "shell" | "python" | "go"
+	Lang      string   // "bash" | "python" | "go"
 	StartLine int      // 1-based source line of the block marker
 	EndLine   int      // 1-based source line of the last body line
 	Body      []string // verbatim body lines; may be empty

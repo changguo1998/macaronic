@@ -7,18 +7,18 @@ import (
 	"testing"
 
 	"github.com/changguo1998/macaronic/internal/engine"
+	"github.com/changguo1998/macaronic/internal/engine/bash"
 	golangengine "github.com/changguo1998/macaronic/internal/engine/golang"
 	pythonengine "github.com/changguo1998/macaronic/internal/engine/python"
-	"github.com/changguo1998/macaronic/internal/engine/shell"
 )
 
 // M11 CLI behavior: warnings are visible but never block; errors still
-// block. The fixtures live in testdata/ and use the real shell engine
+// block. The fixtures live in testdata/ and use the real bash engine
 // (registered here, as main.go does in production) so the CLI path
 // exercises actual inference, not mocks.
 
 func TestCheckWarningOnlyExitsOK(t *testing.T) {
-	engine.Register(shell.Engine{})
+	engine.Register(bash.Engine{})
 	path := filepath.Join("testdata", "warn_only.mac")
 	var out, err strings.Builder
 	if code := Run([]string{"check", path}, &out, &err); code != exitOK {
@@ -34,7 +34,7 @@ func TestCheckWarningOnlyExitsOK(t *testing.T) {
 }
 
 func TestCheckErrorStillBlocks(t *testing.T) {
-	engine.Register(shell.Engine{})
+	engine.Register(bash.Engine{})
 	path := filepath.Join("testdata", "read_before_write.mac")
 	var out, err strings.Builder
 	if code := Run([]string{"check", path}, &out, &err); code != exitFail {
@@ -50,7 +50,7 @@ func TestCheckErrorStillBlocks(t *testing.T) {
 // either (objective: build 仅被 error 阻断). The fixture is copied to a
 // temp dir so emitted artifacts do not pollute testdata/.
 func TestBuildWarningOnlyExitsOK(t *testing.T) {
-	engine.Register(shell.Engine{})
+	engine.Register(bash.Engine{})
 	data, err := os.ReadFile(filepath.Join("testdata", "warn_only.mac"))
 	if err != nil {
 		t.Fatal(err)
@@ -70,11 +70,11 @@ func TestBuildWarningOnlyExitsOK(t *testing.T) {
 }
 
 // TestCheckObservedNotInferredWarns covers the M12 safety net through
-// the real CLI: the shell body mentions count inside a string (no $),
+// the real CLI: the bash body mentions count inside a string (no $),
 // so nothing is inferred; the framework warns that the value may not
 // be injected, but the check still exits 0.
 func TestCheckObservedNotInferredWarns(t *testing.T) {
-	engine.Register(shell.Engine{})
+	engine.Register(bash.Engine{})
 	path := filepath.Join("testdata", "observed_not_inferred.mac")
 	var out, err strings.Builder
 	if code := Run([]string{"check", path}, &out, &err); code != exitOK {
@@ -90,7 +90,7 @@ func TestCheckObservedNotInferredWarns(t *testing.T) {
 }
 
 func TestCheckArithmeticDependency(t *testing.T) {
-	engine.Register(shell.Engine{})
+	engine.Register(bash.Engine{})
 	cases := []struct {
 		name    string
 		file    string
@@ -115,7 +115,7 @@ func TestCheckArithmeticDependency(t *testing.T) {
 }
 
 func TestCheckStaticDiagnosticsUseOriginalLines(t *testing.T) {
-	engine.Register(shell.Engine{})
+	engine.Register(bash.Engine{})
 	engine.Register(pythonengine.Engine{})
 	engine.Register(golangengine.Engine{})
 	cases := []struct {
@@ -123,7 +123,7 @@ func TestCheckStaticDiagnosticsUseOriginalLines(t *testing.T) {
 		file string
 		want string
 	}{
-		{"shell", "shell_nonfirst_diagnostic.mac", `error: stage 1 line 7 var "count":`},
+		{"bash", "bash_nonfirst_diagnostic.mac", `error: stage 1 line 7 var "count":`},
 		{"python", "python_nonfirst_diagnostic.mac", `error: stage 1 line 7 var "count":`},
 		{"go", "go_nonfirst_diagnostic.mac", `error: stage 1 line 7 var "count":`},
 	}

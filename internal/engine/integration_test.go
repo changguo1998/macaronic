@@ -1,5 +1,5 @@
 // Package engine_test holds cross-engine integration tests that run
-// real emitted shell/python/go stages back to back, verifying the
+// real emitted bash/python/go stages back to back, verifying the
 // shared state-file naming contract (<name>.mac<type>) and the
 // sequential data flow.
 package engine_test
@@ -13,9 +13,9 @@ import (
 	"testing"
 
 	"github.com/changguo1998/macaronic/internal/codec"
+	"github.com/changguo1998/macaronic/internal/engine/bash"
 	"github.com/changguo1998/macaronic/internal/engine/golang"
 	"github.com/changguo1998/macaronic/internal/engine/python"
-	"github.com/changguo1998/macaronic/internal/engine/shell"
 	"github.com/changguo1998/macaronic/internal/ir"
 )
 
@@ -28,7 +28,7 @@ func TestCrossEngineFlow(t *testing.T) {
 	contract := ir.Contract{
 		"count": ir.Int, "total": ir.Float, "ok": ir.Bool, "msg": ir.Str,
 	}
-	// macaronic binary on PATH for the shell engine's `codec` helper
+	// macaronic binary on PATH for the bash engine's `codec` helper
 	binDir := t.TempDir()
 	bin := filepath.Join(binDir, "macaronic")
 	rootDir := repoRoot(t)
@@ -39,14 +39,14 @@ func TestCrossEngineFlow(t *testing.T) {
 	}
 	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
-	// stage 1: shell writes count=40 total=2.5 ok msg
-	st1 := &ir.Stage{Index: 1, Lang: "shell", StartLine: 1, Body: []string{
+	// stage 1: bash writes count=40 total=2.5 ok msg
+	st1 := &ir.Stage{Index: 1, Lang: "bash", StartLine: 1, Body: []string{
 		`count=40`,
 		`total=2.5`,
 		`ok=true`,
-		`msg="hello from shell"`,
+		`msg="hello from bash"`,
 	}}
-	runStage(t, shell.Engine{}, st1, root, contract, "1")
+	runStage(t, bash.Engine{}, st1, root, contract, "1")
 
 	// stage 2: python reads count and msg (self-referencing
 	// annotations), writes them back; total/ok read too.
@@ -64,7 +64,7 @@ func TestCrossEngineFlow(t *testing.T) {
 	out := runStage(t, golang.Engine{}, st3, root, contract, "3")
 
 	// asserted exact final output (matches examples/pipeline.mac)
-	want := "final values: count=41 total=2.5 ok=true msg=hello from shell & python\n"
+	want := "final values: count=41 total=2.5 ok=true msg=hello from bash & python\n"
 	if out != want {
 		t.Errorf("final output = %q, want %q", out, want)
 	}
@@ -95,7 +95,7 @@ func TestCrossEngineFlow(t *testing.T) {
 	}
 	msg, _ := os.ReadFile(filepath.Join(stateDir, "msg.macstr"))
 	m, err := codec.Read(bytes.NewReader(msg), ir.Str)
-	if err != nil || m.(string) != "hello from shell & python" {
+	if err != nil || m.(string) != "hello from bash & python" {
 		t.Errorf("msg state = %v (%v)", m, err)
 	}
 }
@@ -109,13 +109,13 @@ func TestCrossEngineListFlow(t *testing.T) {
 	}
 	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	cases := []struct {
-		name      string
-		typ       ir.BasicType
-		shellBody string
-		pyType    string
-		pyBody    string
-		goBody    string
-		want      any
+		name     string
+		typ      ir.BasicType
+		bashBody string
+		pyType   string
+		pyBody   string
+		goBody   string
+		want     any
 	}{
 		{"int", ir.ListOf(ir.Int), `values=(1 2 3)`, "int", "values[0] += 10", "values[1] += 20", []int64{11, 22, 3}},
 		{"float", ir.ListOf(ir.Float), `values=(1.5 2.5 3.5)`, "float", "values[0] += 1.5", "values[1] += 2.5", []float64{3, 5, 3.5}},
@@ -130,8 +130,8 @@ func TestCrossEngineListFlow(t *testing.T) {
 				t.Fatal(err)
 			}
 			contract := ir.Contract{"values": tc.typ}
-			st1 := &ir.Stage{Index: 1, Lang: "shell", StartLine: 1, Body: []string{tc.shellBody}}
-			runStage(t, shell.Engine{}, st1, root, contract, "1")
+			st1 := &ir.Stage{Index: 1, Lang: "bash", StartLine: 1, Body: []string{tc.bashBody}}
+			runStage(t, bash.Engine{}, st1, root, contract, "1")
 			st2 := &ir.Stage{Index: 2, Lang: "python", StartLine: 4, Body: []string{
 				"values: list[" + tc.pyType + "]", tc.pyBody,
 			}}

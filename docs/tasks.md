@@ -26,7 +26,7 @@
   验收：table-driven 覆盖三种位置来源和回退。
 - [x] T14.4 更新 CLI 报告，使 stage、原始 line、变量和消息保持确定性。
   验收：CLI golden 断言精确输出。
-- [x] T14.5 补充 Python/Shell/Go 非首行静态诊断回归测试。
+- [x] T14.5 补充 Python/Bash/Go 非首行静态诊断回归测试。
   验收：三引擎相关测试通过。
 - [x] T14.6 运行 M14 固定质量闸门并创建独立提交。
   验收：gofmt、vet、test、race、diff-check、markdownlint 全部通过。
@@ -58,9 +58,9 @@
 - [x] T16.4 增加四种数组的 round-trip、边界、损坏数据和超大数量测试。
 - [x] T16.5 生成 Go 数组读写 plumbing，并添加 prologue/epilogue 产物断言。
 - [x] T16.6 生成 Python 数组读写 plumbing，并添加 prologue/epilogue 产物断言。
-- [x] T16.7 生成 Shell 数组读写 plumbing，使用 binary-safe bridge，并添加
+- [x] T16.7 生成 Bash 数组读写 plumbing，使用 binary-safe bridge，并添加
   产物断言。
-- [x] T16.8 增加 shell→python→go 跨引擎 E2E，验证写入、读取/修改、再写入
+- [x] T16.8 增加 bash→python→go 跨引擎 E2E，验证写入、读取/修改、再写入
   及最终 codec 值；标量 E2E 无回归。
 - [x] T16.9 运行 M16 固定质量闸门并创建独立提交。
   验收：gofmt、vet、test、race、diff-check、markdownlint 全部通过。

@@ -3,9 +3,9 @@
 本目录包含可运行的 `.mac` 示例。每个示例是一个文件，
 `macaronic run` 一键执行。运行前确保 `macaronic` 在 `PATH` 中。
 
-## 完整示例（shell → python → go）
+## 完整示例（bash → python → go）
 
-见 `pipeline.mac`（主示例）：shell 生成数据，python 加工，go
+见 `pipeline.mac`（主示例）：bash 生成数据，python 加工，go
 汇总输出，四类基本类型（int/float/bool/str）全部传递。
 
 ```sh
@@ -21,7 +21,7 @@ macaronic run pipeline.mac
 
 ```text
 pipeline.mac: running 3 stage(s)
-final values: count=41 total=2.5 ok=true msg=hello from shell & python
+final values: count=41 total=2.5 ok=true msg=hello from bash & python
 pipeline.mac: ok
 ```
 

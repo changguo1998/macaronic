@@ -2,5 +2,5 @@
 [contract]
 count = "int"
 
-#!shell
+#!bash
 echo "count"

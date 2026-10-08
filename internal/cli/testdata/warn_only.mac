@@ -3,5 +3,5 @@
 count = "int"
 total = "int"
 
-#!shell
+#!bash
 count=42
