@@ -1,13 +1,13 @@
 # Macaronic 开发计划（阶段 5）
 
 > 阶段 5 主题：**可靠性补齐与持续集成**。阶段 4（M17–M19，shell 方言引擎与
-> 运行时预检）已归档于 `archive/development-plan-phase4.md`。M20、M21 按顺序
-> 推进，并分别独立提交。
+> 运行时预检）已归档于 `archive/development-plan-phase4.md`。M20 独立提交；
+> M21（持续集成）已取消，原因见该小节。
 >
 > 测试约定：table-driven 单元测试 + golden/产物断言 + 跨方言端到端。
 > 固定质量闸门：`gofmt -l .`（无输出）、`go vet ./...`、`go test ./...`、
-> `go test -race ./...`、`git diff --check`、`npm run lint:md`
-> （M21 起同一组闸门由 CI 执行）。
+> `go test -race ./...`、`git diff --check`、`markdownlint-cli2`
+> （markdownlint 由开发环境提供，不引入仓库内依赖）。
 >
 > **方言行为以实测探针为准，不凭语法知识推断。** 探针结论记录在下面的
 > 「实测事实」小节。
@@ -49,27 +49,17 @@
   错误；缺 `python3` / `go` 时 `check` / `build` / `run` 均 fail-fast；既有
   示例（pipeline / primes / mixed-shells）行为不变。
 
-## M21 — 持续集成
+## M21 — 持续集成（已取消）
 
-- **交付物**：
-  - `.github/workflows/ci.yml`：push 与 pull_request 触发，两个 job——
-    go（`gofmt -l .` 有输出即失败、`go vet`、`go test`、`go test -race`、
-    提交自身的空白检查 `git show --check`）与 markdownlint（`npm ci` +
-    `npm run lint:md`）。CI 额外安装 zsh 与 tcsh，让 shell 方言 e2e 真跑。
-  - markdownlint 版本在仓库内锁定（`package.json` + `package-lock.json`，
-    devDependencies 精确版本），使该闸门可复现且不依赖开发者本机装包。
-  - 仓库根 `.gitignore` 增加 `node_modules/` 与 `tmp/`（后者是 AGENTS.md
-    约定的临时目录）。
-- **依赖**：M20（CI 校验 M20 的产物）。
-- **验证**：本地逐条执行 workflow 中的命令（markdownlint 用仓库锁定的
-  版本跑，`npm run lint:md`）；workflow YAML 用 PyYAML 解析自检。
-- **完成标准**：CI 覆盖现有全部闸门，本地等价命令全过；不再有「闸门依赖人工
-  记得执行」的项。
+原计划引入 GitHub Actions（go 与 markdownlint 两个 job）并在仓库内锁定
+markdownlint 版本。**已取消**：markdownlint 改由开发环境提供，不为一道
+文档格式闸门在仓库里引入 npm 依赖与 workflow；该闸门仍保留在本地质量闸门
+列表中，由开发者本机执行。
 
 ## 里程碑依赖
 
 ```text
-M20 → M21
+M20（M21 已取消）
 ```
 
 ## 范围外（本阶段不做）
