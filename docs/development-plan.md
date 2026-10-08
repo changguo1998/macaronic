@@ -1,70 +1,76 @@
-# Macaronic 开发计划（阶段 5）
+# Macaronic 开发计划（阶段 6）
 
-> 阶段 5 主题：**可靠性补齐与持续集成**。阶段 4（M17–M19，shell 方言引擎与
-> 运行时预检）已归档于 `archive/development-plan-phase4.md`。M20 独立提交；
-> M21（持续集成）已取消，原因见该小节。
+> 阶段 6 主题：**新增 node 引擎（`#!node`）**。阶段 5（M20 可靠性补齐、
+> M21 持续集成已取消）已归档于 `archive/development-plan-phase5.md`。
 >
-> 测试约定：table-driven 单元测试 + golden/产物断言 + 跨方言端到端。
+> 测试约定：table-driven 单元测试 + 生成文本断言 + 跨引擎端到端。
 > 固定质量闸门：`gofmt -l .`（无输出）、`go vet ./...`、`go test ./...`、
 > `go test -race ./...`、`git diff --check`、`markdownlint-cli2`
-> （markdownlint 由开发环境提供，不引入仓库内依赖）。
+> （markdownlint 由开发环境提供）。
 >
-> **方言行为以实测探针为准，不凭语法知识推断。** 探针结论记录在下面的
+> **目标语言行为以实测探针为准，不凭语法知识推断。** 探针结论记录在下面的
 > 「实测事实」小节。
 
-## 背景：实测事实（实现前探针，环境 bash 5.2 / dash / zsh 5.9 / tcsh 6.24.13）
+## 背景：实测事实（实现前探针，Node.js v24.16.0 / Linux x86-64）
 
 | 场景 | 实测结果 |
 | --- | --- |
-| `mapfile` 经进程替换读 `read-list` | 失败被吞：数组静默变空、退出码仍为 0 |
-| 同一 `codec read-list` 直接执行 | `open ...: no such file or directory`，退出码 1 |
-| bash epilogue 写未赋值的 `int` | codec 报 `invalid syntax`，退出码 2，信息无变量名 |
-| bash epilogue 写未赋值的 `str` | 写入空字符串成功（静默，与 csh 相反） |
-| tcsh epilogue 写未赋值标量 | `count: Undefined variable.`，退出码 1（响亮） |
-| `RuntimeChecker` 实现者 | 仅四种 shell 方言，README 却已声明六种都 fail-fast |
+| 抛错 | 退出码 1；stderr 首行 `<绝对路径>:2`，栈帧 `:2:9` |
+| 语法错误 | 同样给出 `<绝对路径>:1` 与 `^` 标记 |
+| `execSync('false')` | 抛错且 `e.status = 1`，可用于「失败即停」 |
+| `.js` 在 `"type": "module"` 目录 | 按 ESM 解析，`require` 不可用 |
+| `.cjs` 位于同一目录 | 正常执行 |
+| `Buffer` 读写 int64 / float64 / 长度前缀 UTF-8 | 全部往返正确 |
+| `Number(9007199254740993n)` | 得 `9007199254740992`，超过 2^53 丢精度 |
+| `BigInt(1.5)` | `RangeError: ... is not an integer` |
+| `typeof 未声明变量` | 返回 `'undefined'`，不抛错 |
+| 读取不存在的 state 文件 | `readFileSync` 抛 `ENOENT`（`e.code`） |
+| 含 NUL 的字符串 | Buffer 原生支持，但与 CLI codec 的 `str` 规则不一致 |
 
-三条结论驱动 M20：失败被进程替换吞掉（list 读）、未赋值标量跨方言行为不一致
-（`str` 静默写空）、文档声明先于实现（python / go 预检）。
+两条结论决定实现：**产物必须是 `.cjs`**（否则用户工程根目录的
+`package.json` 带 `"type": "module"` 时会整体失败），**`int` 以
+`number` 呈现、经 BigInt 中转读写**（2^53 以上丢精度，记入 §12 限制）。
 
-## M20 — 可靠性补齐
+## M22 — node 引擎
 
 - **交付物**：
-  - **list prologue 失败响亮化**：bash / zsh 的 `read-list` 注入不再使用进程
-    替换，改为「重定向到 stage 私有临时文件 → 检查退出码 → 从文件读入 →
-    删除临时文件」；失败时以含 stage 与变量名的错误报出并 `exit 1`。
-  - **未赋值标量行为统一**：Bourne 系（bash / sh / zsh）epilogue 由
-    `"${name-}"` 改为写入前的存在性检查 `[ -n "${name+x}" ]`；csh 增加显式
-    `if ( ! $?name )` 守卫。
-    四种方言在「声明了写、运行时未赋值」时给出同一句 macaronic 级错误（含
-    stage 与变量名），不再出现 `str` 静默写空、也不再只报 codec 的
-    `invalid syntax`。
-  - **python / go 运行时预检**：两个引擎实现 `RuntimeChecker`
-    （`python3` / `go`），使 README 的 fail-fast 声明成立。
-  - **文档同步**：架构 §8 / §12 与 README 按实现更新。
-- **依赖**：无（阶段 4 已完成）。
-- **验证**：三条改动各自的单测与 e2e——bash / zsh 读 list 失败（删除 state
-  文件后直接跑生成的 stage 脚本）；四方言未赋值标量；python / go 预检的
-  缺失与存在两条路径；全量质量闸门通过。
-- **完成标准**：list 读失败不再产生空数组；未赋值标量在四方言下报同一句可读
-  错误；缺 `python3` / `go` 时 `check` / `build` / `run` 均 fail-fast；既有
-  示例（pipeline / primes / mixed-shells）行为不变。
-
-## M21 — 持续集成（已取消）
-
-原计划引入 GitHub Actions（go 与 markdownlint 两个 job）并在仓库内锁定
-markdownlint 版本。**已取消**：markdownlint 改由开发环境提供，不为一道
-文档格式闸门在仓库里引入 npm 依赖与 workflow；该闸门仍保留在本地质量闸门
-列表中，由开发者本机执行。
+  - 新增 `#!node`，生成 `run.cjs`，`RunCommand` 为 `["node", run.cjs]`。
+  - **内嵌 codec**：生成的 JS 直接用 `Buffer` 读写 state 文件（不调用
+    `macaronic codec`），布局与 §10 完全一致 —— int64 LE、float64 LE、
+    bool 1 字节、`str` 4 字节长度 + UTF-8、list 4 字节计数 + 元素编码。
+  - **类型映射**：`int` → JS `number`（读写经 `BigInt` 中转，写入非整数
+    报含变量名的错误）；`float` → `number`；`bool` → `boolean`；
+    `str` → `string`；四种一维数组 → `Array`。
+  - **失败响亮**（沿用 M20 文案）：缺 state 文件（`ENOENT`）与未赋值标量
+    （`typeof x === 'undefined'`）都输出
+    `macaronic: stage N: ...` 并 `process.exit(1)`。
+  - **`str` 与 `str[]` 元素写入拒绝 NUL**：与 CLI codec 的规则一致，避免
+    同一份 state 在 bash 块里被截断。
+  - **分析**：普通赋值 = 写；`x++` / `x +=` = 读 + 写；其余出现 = 读；
+    `let` / `const` / `var` 声明命中契约名 = 遮蔽错误。动态语言不需要类型
+    注解，类型以契约为准（与 shell 方言同口径）。
+  - `RuntimeChecker` 返回 `["node"]`。
+  - 文档：§1 能力矩阵加一行、§8 引擎职责、§12 已知限制（2^53 精度、
+    CommonJS 而非 ESM、用户块内不能用 `import`）。
+- **依赖**：M20（共享失败文案与预检口径）。
+- **验证**：分析用例（读写/遮蔽/算术自增）；生成文本断言（`.cjs`、
+  codec 内嵌、守卫文案）；与 bash、python 的双向跨引擎 e2e（同一
+  `state/` 互通，含 `str[]` 带空格元素）；缺 `node` 时用例 skip 而非失败；
+  三个既有示例行为不变；全量质量闸门通过。
+- **完成标准**：`#!node` 块能与现有六种块互相传值（标量与四种一维数组）；
+  声明写而未赋值、或缺 state 文件时，stage 以非零退出并给出共享文案；
+  用户工程根目录有 `"type": "module"` 时仍可运行。
 
 ## 里程碑依赖
 
 ```text
-M20（M21 已取消）
+M20（阶段 5）→ M22
 ```
 
 ## 范围外（本阶段不做）
 
-- 复合类型（map / struct / 嵌套列表）：架构 §1 列为非目标。
-- 并行执行：架构 §6 明确推迟。
-- csh 的一维数组支持：探针结论不可靠。
-- 多文件 import 与插件机制：架构 §1 列为非目标。
+- ESM / `import` 支持（用户块内可用 `await import()` 自行绕过）。
+- TypeScript、异步顶层 `await`、BigInt 直通类型。
+- 允许 `str` 含 NUL（与 CLI codec 规则冲突）。
+- 其它候选语言（ruby / perl / lua）：本机虽已安装 ruby 3.3.8 与
+  perl 5.40.1，但一次只加一种，先把 node 打磨到与现有引擎同水准。
