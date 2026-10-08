@@ -18,6 +18,7 @@ var allowedLangs = map[string]bool{
 	"bash":   true,
 	"sh":     true,
 	"zsh":    true,
+	"csh":    true,
 	"python": true,
 	"go":     true,
 }

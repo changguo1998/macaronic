@@ -12,8 +12,8 @@
 | --- | --- | --- |
 | M17 | 4–6 工时 | 6 / 6 |
 | M18 | 5–8 工时 | 6 / 6 |
-| M19 | 5–8 工时 | 0 / 5 |
-| **M17–M19** | **约 14–22 工时** | **12 / 17** |
+| M19 | 5–8 工时 | 5 / 5 |
+| **M17–M19** | **约 14–22 工时** | **17 / 17** |
 
 ## M17 — 运行时预检与 sh 引擎
 
@@ -56,17 +56,17 @@
 
 ## M19 — csh 引擎
 
-- [ ] T19.1 新增 `#!csh` 引擎，`RunCommand` 为 `["tcsh", "-e", "run.csh"]`。
+- [x] T19.1 新增 `#!csh` 引擎，`RunCommand` 为 `["tcsh", "-e", "run.csh"]`。
   验收：命令失败使 stage 非零退出（对照：不加 `-e` 会继续执行并以 0 退出，已
   实测）。
-- [ ] T19.2 标量注入：`set name = "`macaronic codec read 'f' 't'`"` 与
+- [x] T19.2 标量注入：`set name = "`macaronic codec read 'f' 't'`"` 与
   `macaronic codec write 'f' 't' "$name"`，路径与类型单引号引用以规避 `[]`
   glob。验收：含空格 `str` 的四类型跨块 e2e 通过。
-- [ ] T19.3 csh 的 list 契约类型报 error 拒绝（同 sh）。验收：check 非零退出、
+- [x] T19.3 csh 的 list 契约类型报 error 拒绝（同 sh）。验收：check 非零退出、
   行号精确；理由（NUL 流按空白切分导致静默错位）写入消息或文档。
-- [ ] T19.4 `ParseDiagnostics` 返回空并注释说明；运行时失败降级为 `stage N` 加
+- [x] T19.4 `ParseDiagnostics` 返回空并注释说明；运行时失败降级为 `stage N` 加
   原始 stderr。验收：失败用例不产生任何错误行号，且 stderr 原样呈现。
-- [ ] T19.5 运行 M19 固定质量闸门并创建独立提交。
+- [x] T19.5 运行 M19 固定质量闸门并创建独立提交。
   验收：gofmt、vet、test、race、diff-check、markdownlint 全部通过。
 
 ## 依赖约束

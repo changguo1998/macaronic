@@ -15,6 +15,7 @@ import (
 	"github.com/changguo1998/macaronic/internal/codec"
 	"github.com/changguo1998/macaronic/internal/engine"
 	"github.com/changguo1998/macaronic/internal/engine/bash"
+	"github.com/changguo1998/macaronic/internal/engine/csh"
 	"github.com/changguo1998/macaronic/internal/engine/golang"
 	"github.com/changguo1998/macaronic/internal/engine/python"
 	"github.com/changguo1998/macaronic/internal/engine/sh"
@@ -205,7 +206,7 @@ func runStage(t *testing.T, e interface {
 // RunCommand actually invokes, so the M17 preflight cannot drift from
 // what run.sh really executes.
 func TestRuntimeCommandsMatchRunCommand(t *testing.T) {
-	for _, eng := range []engine.Engine{bash.Engine{}, sh.Engine{}, zsh.Engine{}, golang.Engine{}, python.Engine{}} {
+	for _, eng := range []engine.Engine{bash.Engine{}, sh.Engine{}, zsh.Engine{}, csh.Engine{}, golang.Engine{}, python.Engine{}} {
 		rc, ok := eng.(engine.RuntimeChecker)
 		if !ok {
 			continue
@@ -353,6 +354,79 @@ func TestCrossDialectBashZshListFlow(t *testing.T) {
 	}{
 		{"values.macint[]", ir.ListOf(ir.Int), []int64{1, 2, 3, 4}},
 		{"words.macstr[]", ir.ListOf(ir.Str), []string{"alpha", "b b", "c c"}},
+	} {
+		data, err := os.ReadFile(filepath.Join(stateDir, tc.file))
+		if err != nil {
+			t.Fatalf("read %s: %v", tc.file, err)
+		}
+		got, err := codec.Read(bytes.NewReader(data), tc.typ)
+		if err != nil {
+			t.Fatalf("codec read %s: %v", tc.file, err)
+		}
+		if !reflect.DeepEqual(got, tc.want) {
+			t.Errorf("%s = %#v, want %#v", tc.file, got, tc.want)
+		}
+	}
+}
+
+// TestCrossDialectBashCshFlow runs scalars through bash → csh → bash.
+// csh is the most divergent dialect (backticks instead of $(...),
+// `set name = value` instead of `name=value`, `@` for arithmetic), so
+// this is the proof that the shared state ABI still interchanges.
+func TestCrossDialectBashCshFlow(t *testing.T) {
+	for _, cmd := range []string{"bash", "tcsh"} {
+		if _, err := exec.LookPath(cmd); err != nil {
+			t.Skipf("%s not available", cmd)
+		}
+	}
+	binDir := t.TempDir()
+	bin := filepath.Join(binDir, "macaronic")
+	if out, err := exec.Command("go", "build", "-o", bin,
+		repoRoot(t)+"/cmd/macaronic").CombinedOutput(); err != nil {
+		t.Fatalf("go build: %v\n%s", err, out)
+	}
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "state"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	contract := ir.Contract{
+		"count": ir.Int, "price": ir.Float, "flag": ir.Bool, "msg": ir.Str,
+	}
+
+	st1 := &ir.Stage{Index: 1, Lang: "bash", StartLine: 5, EndLine: 8, Body: []string{
+		"count=40",
+		"price=1.25",
+		"flag=true",
+		`msg="from bash"`,
+	}}
+	runStage(t, bash.Engine{}, st1, root, contract, "1")
+
+	// csh reads through its own prologue and writes back with `set`/`@`.
+	st2 := &ir.Stage{Index: 2, Lang: "csh", StartLine: 12, EndLine: 15, Body: []string{
+		"@ count = $count + 2",
+		`set msg = "$msg + csh"`,
+		"set flag = false",
+		"set price = $price",
+	}}
+	runStage(t, csh.Engine{}, st2, root, contract, "2")
+
+	st3 := &ir.Stage{Index: 3, Lang: "bash", StartLine: 20, EndLine: 21, Body: []string{
+		`msg="$msg + bash"`,
+	}}
+	runStage(t, bash.Engine{}, st3, root, contract, "3")
+
+	stateDir := filepath.Join(root, "state")
+	for _, tc := range []struct {
+		file string
+		typ  ir.BasicType
+		want any
+	}{
+		{"count.macint", ir.Int, int64(42)},
+		{"price.macfloat", ir.Float, 1.25},
+		{"flag.macbool", ir.Bool, false},
+		{"msg.macstr", ir.Str, "from bash + csh + bash"},
 	} {
 		data, err := os.ReadFile(filepath.Join(stateDir, tc.file))
 		if err != nil {
