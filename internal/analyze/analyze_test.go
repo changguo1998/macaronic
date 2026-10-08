@@ -2,6 +2,8 @@ package analyze
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -322,5 +324,85 @@ func TestDetailedDiagnosticsMapToSourceLines(t *testing.T) {
 				t.Errorf("issue = %+v, want stage 1 line %d var %q", it, tc.want, tc.varName)
 			}
 		})
+	}
+}
+
+// runtimeMockEngine layers the optional engine.RuntimeChecker surface
+// on mockEngine so the M17 preflight can be tested in isolation.
+type runtimeMockEngine struct {
+	mockEngine
+	required []string
+}
+
+func (m runtimeMockEngine) RequiredCommands() []string { return m.required }
+
+// TestRuntimePreflightMissingRuntime covers the blocking path: a
+// dialect whose interpreter is absent is reported with stage context.
+func TestRuntimePreflightMissingRuntime(t *testing.T) {
+	const absent = "macaronic-runtime-definitely-absent-xyz"
+	p := &ir.Program{Contract: ir.Contract{"count": ir.Int}}
+	p.Stages = append(p.Stages, *mkStage(1, "sh", 5))
+	r := mockResolver(runtimeMockEngine{
+		mockEngine{name: "sh", writes: ir.VarSet{"count": true}},
+		[]string{absent},
+	})
+	got := (Analyzer{Engines: r}).Run(p)
+	if got.OK() {
+		t.Fatalf("missing runtime must block; issues = %+v", got.Issues)
+	}
+	if len(got.Issues) != 1 {
+		t.Fatalf("issues = %+v, want exactly the runtime issue", got.Issues)
+	}
+	it := got.Issues[0]
+	if it.Stage != 1 || it.Line != 5 {
+		t.Errorf("stage/line = %d/%d, want 1/5", it.Stage, it.Line)
+	}
+	if !strings.Contains(it.Msg, `language "sh" requires`) ||
+		!strings.Contains(it.Msg, absent) {
+		t.Errorf("msg = %q, want language and command context", it.Msg)
+	}
+}
+
+// TestRuntimePreflightPresentRuntime covers the passing path: when the
+// command resolves, the stage analyzes normally and nothing is reported.
+func TestRuntimePreflightPresentRuntime(t *testing.T) {
+	dir := t.TempDir()
+	const cmd = "macaronic-test-runtime"
+	if err := os.WriteFile(filepath.Join(dir, cmd), []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	p := &ir.Program{Contract: ir.Contract{"count": ir.Int}}
+	p.Stages = append(p.Stages, *mkStage(1, "sh", 5))
+	r := mockResolver(runtimeMockEngine{
+		mockEngine{name: "sh", writes: ir.VarSet{"count": true}},
+		[]string{cmd},
+	})
+	if got := (Analyzer{Engines: r}).Run(p); !got.OK() {
+		t.Errorf("present runtime must not block; issues = %+v", got.Issues)
+	}
+}
+
+// TestRuntimePreflightKeepsAnalyzing pins the M17 design decision that a
+// missing runtime does not skip the stage: dropping its inferred writes
+// would cascade into bogus read-before-write errors for later stages.
+func TestRuntimePreflightKeepsAnalyzing(t *testing.T) {
+	const absent = "macaronic-runtime-definitely-absent-xyz"
+	p := &ir.Program{Contract: ir.Contract{"count": ir.Int}}
+	p.Stages = append(p.Stages,
+		*mkStage(1, "sh", 5),
+		*mkStage(2, "bash", 9),
+	)
+	r := mockResolver(
+		runtimeMockEngine{mockEngine{name: "sh", writes: ir.VarSet{"count": true}}, []string{absent}},
+		mockEngine{name: "bash", reads: ir.VarSet{"count": true}},
+	)
+	got := (Analyzer{Engines: r}).Run(p)
+	if len(got.Issues) != 1 {
+		t.Fatalf("issues = %+v, want only the runtime issue", got.Issues)
+	}
+	if strings.Contains(got.Issues[0].Msg, "before any write") {
+		t.Errorf("lost stage writes cascaded: %+v", got.Issues)
 	}
 }

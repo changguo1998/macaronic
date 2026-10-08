@@ -29,6 +29,10 @@ type Engine struct{}
 // Name implements engine.Engine.
 func (Engine) Name() string { return "bash" }
 
+// RequiredCommands implements engine.RuntimeChecker: run.sh is invoked
+// through bash (see RunCommand), so bash must be on PATH.
+func (Engine) RequiredCommands() []string { return []string{"bash"} }
+
 // writeRe matches a Bash assignment at line start.
 var writeRe = regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_]*)=`)
 

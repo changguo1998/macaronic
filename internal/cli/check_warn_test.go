@@ -2,6 +2,7 @@ package cli
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -17,7 +18,18 @@ import (
 // (registered here, as main.go does in production) so the CLI path
 // exercises actual inference, not mocks.
 
+// requireShell skips a test when the dialect's interpreter is not on
+// PATH. The M17 runtime preflight makes check/build fail without it, so
+// these fixtures must skip rather than fail on machines lacking bash.
+func requireShell(t *testing.T, cmd string) {
+	t.Helper()
+	if _, err := exec.LookPath(cmd); err != nil {
+		t.Skipf("%s not available: %v", cmd, err)
+	}
+}
+
 func TestCheckWarningOnlyExitsOK(t *testing.T) {
+	requireShell(t, "bash")
 	engine.Register(bash.Engine{})
 	path := filepath.Join("testdata", "warn_only.mac")
 	var out, err strings.Builder
@@ -34,6 +46,7 @@ func TestCheckWarningOnlyExitsOK(t *testing.T) {
 }
 
 func TestCheckErrorStillBlocks(t *testing.T) {
+	requireShell(t, "bash")
 	engine.Register(bash.Engine{})
 	path := filepath.Join("testdata", "read_before_write.mac")
 	var out, err strings.Builder
@@ -50,6 +63,7 @@ func TestCheckErrorStillBlocks(t *testing.T) {
 // either (objective: build 仅被 error 阻断). The fixture is copied to a
 // temp dir so emitted artifacts do not pollute testdata/.
 func TestBuildWarningOnlyExitsOK(t *testing.T) {
+	requireShell(t, "bash")
 	engine.Register(bash.Engine{})
 	data, err := os.ReadFile(filepath.Join("testdata", "warn_only.mac"))
 	if err != nil {
@@ -74,6 +88,7 @@ func TestBuildWarningOnlyExitsOK(t *testing.T) {
 // so nothing is inferred; the framework warns that the value may not
 // be injected, but the check still exits 0.
 func TestCheckObservedNotInferredWarns(t *testing.T) {
+	requireShell(t, "bash")
 	engine.Register(bash.Engine{})
 	path := filepath.Join("testdata", "observed_not_inferred.mac")
 	var out, err strings.Builder
@@ -90,6 +105,7 @@ func TestCheckObservedNotInferredWarns(t *testing.T) {
 }
 
 func TestCheckArithmeticDependency(t *testing.T) {
+	requireShell(t, "bash")
 	engine.Register(bash.Engine{})
 	cases := []struct {
 		name    string
@@ -115,6 +131,7 @@ func TestCheckArithmeticDependency(t *testing.T) {
 }
 
 func TestCheckStaticDiagnosticsUseOriginalLines(t *testing.T) {
+	requireShell(t, "bash")
 	engine.Register(bash.Engine{})
 	engine.Register(pythonengine.Engine{})
 	engine.Register(golangengine.Engine{})

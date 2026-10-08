@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/changguo1998/macaronic/internal/codec"
+	"github.com/changguo1998/macaronic/internal/engine"
 	"github.com/changguo1998/macaronic/internal/engine/bash"
 	"github.com/changguo1998/macaronic/internal/engine/golang"
 	"github.com/changguo1998/macaronic/internal/engine/python"
@@ -195,4 +196,31 @@ func runStage(t *testing.T, e interface {
 		t.Fatalf("stage%s run: %v\n%s", n, err, out.String())
 	}
 	return out.String()
+}
+
+// TestRuntimeCommandsMatchRunCommand pins T17.2: for every engine that
+// implements RuntimeChecker, RequiredCommands[0] must be the executable
+// RunCommand actually invokes, so the M17 preflight cannot drift from
+// what run.sh really executes.
+func TestRuntimeCommandsMatchRunCommand(t *testing.T) {
+	for _, eng := range []engine.Engine{bash.Engine{}, golang.Engine{}, python.Engine{}} {
+		rc, ok := eng.(engine.RuntimeChecker)
+		if !ok {
+			continue
+		}
+		argv := eng.RunCommand("stage1")
+		if len(argv) == 0 {
+			t.Errorf("%s: RunCommand returned no argv", eng.Name())
+			continue
+		}
+		req := rc.RequiredCommands()
+		if len(req) == 0 {
+			t.Errorf("%s: RuntimeChecker declared no commands", eng.Name())
+			continue
+		}
+		if req[0] != argv[0] {
+			t.Errorf("%s: RequiredCommands[0] = %q, RunCommand argv[0] = %q",
+				eng.Name(), req[0], argv[0])
+		}
+	}
 }

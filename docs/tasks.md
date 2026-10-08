@@ -10,21 +10,21 @@
 
 | 里程碑 | 预估工作量 | 已打勾 / 总数 |
 | --- | --- | --- |
-| M17 | 4–6 工时 | 0 / 6 |
+| M17 | 4–6 工时 | 3 / 6 |
 | M18 | 5–8 工时 | 0 / 6 |
 | M19 | 5–8 工时 | 0 / 5 |
-| **M17–M19** | **约 14–22 工时** | **0 / 17** |
+| **M17–M19** | **约 14–22 工时** | **3 / 17** |
 
 ## M17 — 运行时预检与 sh 引擎
 
-- [ ] T17.1 `engine` 增加可选接口
+- [x] T17.1 `engine` 增加可选接口
   `RuntimeChecker { RequiredCommands() []string }`，并在 `analyze.Analyzer.Run`
   中每 stage 探测；缺失即产出 `SevError` 级 Issue（含 stage 与起始行）并跳过
   该 stage 后续分析。验收：缺失与存在两条路径的 table-driven 测试。
-- [ ] T17.2 仅 shell 家族实现 `RuntimeChecker`，命令与各自 `RunCommand` 的
+- [x] T17.2 仅 shell 家族实现 `RuntimeChecker`，命令与各自 `RunCommand` 的
   `argv[0]` 一致（`bash` / `sh` / `zsh` / `tcsh`）；python / go 不实现。
   验收：断言两者一致性的测试，防止后续漂移。
-- [ ] T17.3 为 cli 层注册 shell 引擎的测试补运行时守卫，使无该方言的环境
+- [x] T17.3 为 cli 层注册 shell 引擎的测试补运行时守卫，使无该方言的环境
   以 skip 而非硬失败结束。验收：全量测试通过且守卫覆盖所有相关用例。
 - [ ] T17.4 新增 `#!sh` 引擎：`#!/bin/sh`、`set -eu`、标量 prologue/epilogue
   走 `macaronic codec`；`RunCommand` 为 `["sh", "run.sh"]`。

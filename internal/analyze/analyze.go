@@ -6,6 +6,7 @@ package analyze
 import (
 	"fmt"
 	"io"
+	"os/exec"
 	"regexp"
 	"sort"
 	"strings"
@@ -146,6 +147,21 @@ func (a Analyzer) Run(p *ir.Program) Report {
 			continue
 		}
 
+		// Runtime preflight (M17): a dialect whose interpreter is not
+		// installed is an environment problem, not a static one. Report
+		// it with stage context and keep analyzing: skipping the stage
+		// would drop its inferred writes and cascade into bogus
+		// read-before-write errors in later stages.
+		if rc, ok := eng.(engine.RuntimeChecker); ok {
+			if cmd := firstMissingCommand(rc.RequiredCommands()); cmd != "" {
+				iss = append(iss, Issue{
+					Stage: st.Index, Line: st.StartLine,
+					Msg: fmt.Sprintf("language %q requires %q on PATH, not found",
+						st.Lang, cmd),
+				})
+			}
+		}
+
 		result := engine.Analysis{}
 		if detailed, ok := eng.(engine.DetailedAnalyzer); ok {
 			result = detailed.AnalyzeDetailed(st, p.Contract)
@@ -247,6 +263,18 @@ func mergeVarSets(dst ir.VarSet, srcs ...ir.VarSet) {
 			dst[k] = true
 		}
 	}
+}
+
+// firstMissingCommand returns the first command that does not resolve
+// on PATH, or "" when all of them do. It backs the M17 runtime
+// preflight for engines implementing engine.RuntimeChecker.
+func firstMissingCommand(cmds []string) string {
+	for _, c := range cmds {
+		if _, err := exec.LookPath(c); err != nil {
+			return c
+		}
+	}
+	return ""
 }
 
 func sortedContractKeys(c ir.Contract) []string {

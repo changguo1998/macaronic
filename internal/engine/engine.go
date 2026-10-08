@@ -26,6 +26,24 @@ type DetailedAnalyzer interface {
 	AnalyzeDetailed(st *ir.Stage, c ir.Contract) Analysis
 }
 
+// RuntimeChecker is optionally implemented by engines that need an
+// external runtime on PATH. The shell dialects do; python and go do
+// not, because their end-to-end tests skip when the runtime is absent
+// and a hard probe would turn those skips into failures on machines
+// without that runtime.
+//
+// The analyzer probes RequiredCommands before the stage's static
+// analysis, so a missing dialect is reported as a precise
+// "requires X on PATH" error at check/build/run time instead of
+// surfacing later as an exec failure mid-run. It is optional for the
+// same reason as DetailedAnalyzer: mocks must not be forced to
+// implement it.
+type RuntimeChecker interface {
+	// RequiredCommands returns the executables this engine needs on
+	// PATH. The first entry must match RunCommand's argv[0].
+	RequiredCommands() []string
+}
+
 // Error returns the first structured diagnostic as a legacy error, preserving
 // the old Analyze contract for callers that still expect error text.
 func (a Analysis) Error(st *ir.Stage) error {
