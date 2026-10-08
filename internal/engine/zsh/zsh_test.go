@@ -92,13 +92,22 @@ func TestEmitListPlumbing(t *testing.T) {
 	for _, want := range []string{
 		"#!/usr/bin/env zsh\n",
 		"set -eu\n",
+		// M20: the list prologue reads through a stage-private scratch
+		// file so a read-list failure cannot hide behind process
+		// substitution.
+		`if ! macaronic codec read-list "` + stateDir + `/values.macint[]" "int[]" > "` + stageDir + `/.prologue-values.tmp"; then`,
+		`echo 'macaronic: stage 1: cannot read contract variable "values" (int[])' >&2`,
 		"values=()\n",
-		`while IFS= read -r -d '' __macaronic_item; do values+=("$__macaronic_item"); done < <(macaronic codec read-list "` + stateDir + `/values.macint[]" "int[]")`,
+		`while IFS= read -r -d '' __macaronic_item; do values+=("$__macaronic_item"); done < "` + stageDir + `/.prologue-values.tmp"`,
+		`rm -f "` + stageDir + `/.prologue-values.tmp"`,
 		// The write-only list (words) never gets a prologue, so the
 		// epilogue must define it before expanding "${words[@]}".
 		"(( ${+words} )) || words=()\n",
 		`macaronic codec write-list "` + stateDir + `/words.macstr[]" "str[]" "${words[@]}"`,
-		`macaronic codec write "` + stateDir + `/count.macint" "int" "${count-}"`,
+		// M20: a declared write the body never assigned aborts with the
+		// shared message.
+		`(( ${+count} )) || { echo 'macaronic: stage 1: contract variable "count" is unset at epilogue' >&2; exit 1; }`,
+		`macaronic codec write "` + stateDir + `/count.macint" "int" "$count"`,
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("generated run.sh missing %q:\n%s", want, out)

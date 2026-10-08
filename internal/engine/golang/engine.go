@@ -23,6 +23,13 @@ type Engine struct{}
 // Name implements engine.Engine.
 func (Engine) Name() string { return "go" }
 
+// RequiredCommands implements engine.RuntimeChecker: unlike the
+// interpreted dialects, RunCommand executes the compiled artifact, but
+// Emit shells out to the Go toolchain to build it. Preflighting `go`
+// covers the build step, so a missing toolchain fails check/build/run
+// instead of surfacing later from Emit.
+func (Engine) RequiredCommands() []string { return []string{"go"} }
+
 // Analyze implements engine.Engine.
 //
 // Dependency rules:

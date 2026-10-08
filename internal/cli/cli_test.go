@@ -3,6 +3,9 @@ package cli
 import (
 	"strings"
 	"testing"
+
+	"github.com/changguo1998/macaronic/internal/engine"
+	pythonengine "github.com/changguo1998/macaronic/internal/engine/python"
 )
 
 // smokeCase holds one CLI invocation expectations.
@@ -73,6 +76,25 @@ func TestRunSmoke(t *testing.T) {
 		if got != c.wantCode {
 			t.Errorf("%s: code = %d, want %d", c.name, got, c.wantCode)
 		}
+	}
+}
+
+// TestCheckPreflightsMissingRuntime covers the M20 acceptance criterion:
+// a runtime that is absent must fail `check` itself (not only `run`),
+// naming the command it looked for. PATH is pointed at an empty dir so
+// nothing resolves.
+func TestCheckPreflightsMissingRuntime(t *testing.T) {
+	engine.Register(pythonengine.Engine{})
+	path := writeFile(t, "py.mac", "#!mac\n[contract]\ncount = \"int\"\n\n#!python\ncount: int = 1\n")
+	t.Setenv("PATH", t.TempDir())
+
+	var out, errOut strings.Builder
+	if code := Run([]string{"check", path}, &out, &errOut); code != exitFail {
+		t.Fatalf("check code = %d, want %d\nstdout=%q\nstderr=%q",
+			code, exitFail, out.String(), errOut.String())
+	}
+	if !strings.Contains(out.String(), `requires "python3"`) {
+		t.Errorf("check stdout = %q, want a python3 preflight error", out.String())
 	}
 }
 

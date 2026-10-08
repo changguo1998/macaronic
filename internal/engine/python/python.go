@@ -24,6 +24,12 @@ type Engine struct{}
 // Name returns "python".
 func (Engine) Name() string { return "python" }
 
+// RequiredCommands implements engine.RuntimeChecker: run.py is invoked
+// through python3 (see RunCommand), so python3 must be on PATH. The
+// M20 preflight closes the gap where `check` passed on a host without
+// Python and only `run` failed.
+func (Engine) RequiredCommands() []string { return []string{"python3"} }
+
 // varRefRe matches a contract var as a whole identifier token.
 func varRefRe(name string) *regexp.Regexp {
 	return regexp.MustCompile(`\b` + regexp.QuoteMeta(name) + `\b`)

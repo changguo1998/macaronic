@@ -27,20 +27,20 @@ type DetailedAnalyzer interface {
 }
 
 // RuntimeChecker is optionally implemented by engines that need an
-// external runtime on PATH. The shell dialects do; python and go do
-// not, because their end-to-end tests skip when the runtime is absent
-// and a hard probe would turn those skips into failures on machines
-// without that runtime.
+// external runtime on PATH. All six built-in engines do (M20): a
+// missing interpreter or toolchain is an environment problem, so it is
+// reported once at check/build/run time rather than surfacing as an
+// exec failure mid-run.
 //
 // The analyzer probes RequiredCommands before the stage's static
 // analysis, so a missing dialect is reported as a precise
-// "requires X on PATH" error at check/build/run time instead of
-// surfacing later as an exec failure mid-run. It is optional for the
-// same reason as DetailedAnalyzer: mocks must not be forced to
-// implement it.
+// "requires X on PATH" error. It is optional for the same reason as
+// DetailedAnalyzer: mocks must not be forced to implement it.
 type RuntimeChecker interface {
 	// RequiredCommands returns the executables this engine needs on
-	// PATH. The first entry must match RunCommand's argv[0].
+	// PATH. The first entry must match RunCommand's argv[0], except for
+	// a compiled language, which runs the artifact it built and
+	// therefore declares the toolchain used during Emit (go -> "go").
 	RequiredCommands() []string
 }
 

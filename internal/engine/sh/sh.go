@@ -32,6 +32,12 @@ import (
 // reference.
 const genFile = "run.sh"
 
+// epilogueUnsetMsg is the shared injected failure message: every
+// dialect emits the same text so one symptom reads the same everywhere
+// (docs/architecture.md §12). sh has no list support, so it needs only
+// the scalar one.
+const epilogueUnsetMsg = "macaronic: stage %d: contract variable %q is unset at epilogue"
+
 // Engine is the POSIX sh backend.
 type Engine struct{}
 
@@ -304,11 +310,14 @@ func (Engine) Emit(st *ir.Stage, c ir.Contract, stageDir, stateDir string,
 		}
 	}
 
-	// Epilogue: persist contract variables. ${name-} keeps a variable
-	// the body never assigned from tripping set -u.
+	// Epilogue: persist contract variables. A declared write the body
+	// never assigned is an error, as in every dialect (M20): the old
+	// "${name-}" default silently wrote an empty str.
 	for _, name := range sortedUnion(writes) {
 		f := filepath.Join(stateDir, stateFileName(name, c[name]))
-		write(fmt.Sprintf("macaronic codec write %q %s \"${%s-}\"\n",
+		write(fmt.Sprintf("[ -n \"${%s+x}\" ] || { echo '%s' >&2; exit 1; }\n",
+			name, fmt.Sprintf(epilogueUnsetMsg, st.Index, name)))
+		write(fmt.Sprintf("macaronic codec write %q %s \"$%s\"\n",
 			f, string(c[name]), name))
 	}
 

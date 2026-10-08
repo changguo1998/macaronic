@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/changguo1998/macaronic/internal/codec"
@@ -205,6 +206,10 @@ func runStage(t *testing.T, e interface {
 // implements RuntimeChecker, RequiredCommands[0] must be the executable
 // RunCommand actually invokes, so the M17 preflight cannot drift from
 // what run.sh really executes.
+//
+// Exception (M20): a compiled language runs the artifact it built, not
+// the compiler, so its declared command is the toolchain used during
+// Emit. TestRuntimeCommandsDeclared pins those requirements instead.
 func TestRuntimeCommandsMatchRunCommand(t *testing.T) {
 	for _, eng := range []engine.Engine{bash.Engine{}, sh.Engine{}, zsh.Engine{}, csh.Engine{}, golang.Engine{}, python.Engine{}} {
 		rc, ok := eng.(engine.RuntimeChecker)
@@ -221,11 +226,154 @@ func TestRuntimeCommandsMatchRunCommand(t *testing.T) {
 			t.Errorf("%s: RuntimeChecker declared no commands", eng.Name())
 			continue
 		}
-		if req[0] != argv[0] {
+		if req[0] == argv[0] {
+			continue
+		}
+		if !strings.Contains(argv[0], string(filepath.Separator)) {
 			t.Errorf("%s: RequiredCommands[0] = %q, RunCommand argv[0] = %q",
 				eng.Name(), req[0], argv[0])
 		}
 	}
+}
+
+// TestRuntimeCommandsDeclared pins the M20 preflight table: every
+// supported block language names the commands check/build/run must find
+// before the program can run at all (README states this for all six).
+func TestRuntimeCommandsDeclared(t *testing.T) {
+	want := map[string][]string{
+		"bash":   {"bash"},
+		"sh":     {"sh"},
+		"zsh":    {"zsh"},
+		"csh":    {"tcsh"},
+		"python": {"python3"},
+		"go":     {"go"},
+	}
+	for _, eng := range []engine.Engine{bash.Engine{}, sh.Engine{}, zsh.Engine{}, csh.Engine{}, golang.Engine{}, python.Engine{}} {
+		rc, ok := eng.(engine.RuntimeChecker)
+		if !ok {
+			t.Errorf("%s: does not implement engine.RuntimeChecker", eng.Name())
+			continue
+		}
+		if got := rc.RequiredCommands(); !reflect.DeepEqual(got, want[eng.Name()]) {
+			t.Errorf("%s: RequiredCommands() = %v, want %v", eng.Name(), got, want[eng.Name()])
+		}
+	}
+}
+
+// TestUnsetScalarIsLoudEverywhere pins the M20 cross-dialect contract:
+// a write the body declares but never assigns at runtime aborts with
+// the same message in all four shell dialects (before M20 csh said
+// `Undefined variable.` and bash silently wrote an empty str). The
+// stub `macaronic` on PATH never gets called: the guard fires first.
+func TestUnsetScalarIsLoudEverywhere(t *testing.T) {
+	const wantMsg = `macaronic: stage 1: contract variable "count" is unset at epilogue`
+	cases := []struct {
+		eng  engine.Engine
+		body []string
+	}{
+		{bash.Engine{}, []string{"count=1", "unset count"}},
+		{sh.Engine{}, []string{"count=1", "unset count"}},
+		{zsh.Engine{}, []string{"count=1", "unset count"}},
+		{csh.Engine{}, []string{"set count = 1", "unset count"}},
+	}
+	for _, tc := range cases {
+		name := tc.eng.Name()
+		t.Run(name, func(t *testing.T) {
+			argv := tc.eng.RunCommand("unused") // just for the interpreter name
+			if _, err := exec.LookPath(argv[0]); err != nil {
+				t.Skipf("%s not available", argv[0])
+			}
+			root := t.TempDir()
+			stateDir := filepath.Join(root, "state")
+			stageDir := filepath.Join(root, "stage1")
+			binDir := filepath.Join(root, "bin")
+			for _, d := range []string{stateDir, stageDir, binDir} {
+				if err := os.MkdirAll(d, 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			stubMacaronic(t, binDir)
+
+			st := &ir.Stage{Index: 1, Lang: name, StartLine: 4, Body: tc.body}
+			if err := tc.eng.Emit(st, ir.Contract{"count": ir.Int}, stageDir, stateDir, nil); err != nil {
+				t.Fatalf("Emit: %v", err)
+			}
+			out, err := runEmitted(t, tc.eng, stageDir)
+			if err == nil {
+				t.Fatalf("stage succeeded despite an unset write target:\n%s", out)
+			}
+			if !strings.Contains(out, wantMsg) {
+				t.Errorf("output = %q, want the shared message %q", out, wantMsg)
+			}
+		})
+	}
+}
+
+// TestListReadFailureIsLoud covers the M20 fix for the silent-empty
+// array: a read-list failure must abort the stage on every dialect that
+// supports lists, instead of yielding an empty array and exit 0.
+func TestListReadFailureIsLoud(t *testing.T) {
+	const wantMsg = `macaronic: stage 2: cannot read contract variable "values" (int[])`
+	for _, eng := range []engine.Engine{bash.Engine{}, zsh.Engine{}} {
+		name := eng.Name()
+		t.Run(name, func(t *testing.T) {
+			if _, err := exec.LookPath(name); err != nil {
+				t.Skipf("%s not available", name)
+			}
+			root := t.TempDir()
+			stateDir := filepath.Join(root, "state")
+			stageDir := filepath.Join(root, "stage2")
+			binDir := filepath.Join(root, "bin")
+			for _, d := range []string{stateDir, stageDir, binDir} {
+				if err := os.MkdirAll(d, 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			stubMacaronic(t, binDir)
+
+			st := &ir.Stage{Index: 2, Lang: name, StartLine: 4, Body: []string{
+				`for v in "${values[@]}"; do echo "$v"; done`,
+			}}
+			if err := eng.Emit(st, ir.Contract{"values": ir.BasicType("int[]")}, stageDir, stateDir, nil); err != nil {
+				t.Fatalf("Emit: %v", err)
+			}
+			out, err := runEmitted(t, eng, stageDir)
+			if err == nil {
+				t.Fatalf("stage succeeded despite a failing read-list:\n%s", out)
+			}
+			if !strings.Contains(out, wantMsg) {
+				t.Errorf("output = %q, want the shared message %q", out, wantMsg)
+			}
+		})
+	}
+}
+
+// stubMacaronic puts a `macaronic` that always fails on PATH, standing
+// in for a missing or corrupt state file. State directories are cleaned
+// between stages, so a real codec failure is hard to stage hermetically;
+// a stub makes the failure deterministic.
+func stubMacaronic(t *testing.T, binDir string) {
+	t.Helper()
+	const stub = "#!/bin/sh\necho 'codec: no such file' >&2\nexit 1\n"
+	if err := os.WriteFile(filepath.Join(binDir, "macaronic"), []byte(stub), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
+// runEmitted executes an emitted stage through its own RunCommand and
+// returns its combined stdout+stderr with the execution error. It is the
+// error-tolerant sibling of runStage's helper.
+func runEmitted(t *testing.T, e engine.Engine, stageDir string) (string, error) {
+	t.Helper()
+	argv := e.RunCommand(stageDir)
+	cmd := exec.Command(argv[0], argv[1:]...)
+	cmd.Dir = stageDir
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &out
+	err := cmd.Run()
+	return out.String(), err
 }
 
 // TestCrossDialectBashShFlow runs the four scalar types through

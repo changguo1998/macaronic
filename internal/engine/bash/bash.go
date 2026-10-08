@@ -23,6 +23,17 @@ import (
 // reference.
 const genFile = "run.sh"
 
+// Injected failure messages. Every dialect emits the same text so one
+// symptom reads the same everywhere (docs/architecture.md §12).
+const (
+	listReadMsg      = "macaronic: stage %d: cannot read contract variable %q (%s)"
+	epilogueUnsetMsg = "macaronic: stage %d: contract variable %q is unset at epilogue"
+)
+
+// scratchName is the per-stage scratch file one list prologue reads
+// through; stageDir is rebuilt on every build.
+func scratchName(name string) string { return ".prologue-" + name + ".tmp" }
+
 // Engine is the Bash backend.
 type Engine struct{}
 
@@ -257,8 +268,20 @@ func (Engine) Emit(st *ir.Stage, c ir.Contract, stageDir, stateDir string,
 	for _, name := range sortedVars(reads) {
 		f := filepath.Join(stateDir, stateFileName(name, c[name]))
 		if ir.IsList(c[name]) {
-			write(fmt.Sprintf("mapfile -d '' -t %s < <(macaronic codec read-list %q %s)\n",
-				name, f, string(c[name])))
+			// Process substitution would hide a read-list failure: the
+			// array silently ends up empty and the script still exits 0
+			// (probe-verified). Redirect into a stage-private scratch
+			// file instead, so the exit status is observable.
+			tmp := filepath.Join(stageDir, scratchName(name))
+			write(fmt.Sprintf("if ! macaronic codec read-list %q %s > %q; then\n",
+				f, string(c[name]), tmp))
+			write(fmt.Sprintf("  rm -f %q\n", tmp))
+			write(fmt.Sprintf("  echo '%s' >&2\n",
+				fmt.Sprintf(listReadMsg, st.Index, name, c[name])))
+			write("  exit 1\n")
+			write("fi\n")
+			write(fmt.Sprintf("mapfile -d '' -t %s < %q\n", name, tmp))
+			write(fmt.Sprintf("rm -f %q\n", tmp))
 		} else {
 			write(fmt.Sprintf("%s=$(macaronic codec read %q %s)\n",
 				name, f, string(c[name])))
@@ -275,14 +298,21 @@ func (Engine) Emit(st *ir.Stage, c ir.Contract, stageDir, stateDir string,
 		}
 	}
 
-	// Epilogue: persist contract variables.
+	// Epilogue: persist contract variables. A declared write the body
+	// never assigned is an error in every dialect: csh cannot express
+	// bash's old "${name-}" default, and a silent empty value hides
+	// bugs (an unset str was written as "" before M20). The guard keeps
+	// the message identical across dialects. Lists stay lenient: an
+	// unset array expands to zero elements, i.e. an empty list.
 	for _, name := range sortedVars(writes) {
 		f := filepath.Join(stateDir, stateFileName(name, c[name]))
 		if ir.IsList(c[name]) {
 			write(fmt.Sprintf("macaronic codec write-list %q %s \"${%s[@]}\"\n",
 				f, string(c[name]), name))
 		} else {
-			write(fmt.Sprintf("macaronic codec write %q %s \"${%s-}\"\n",
+			write(fmt.Sprintf("[ -n \"${%s+x}\" ] || { echo '%s' >&2; exit 1; }\n",
+				name, fmt.Sprintf(epilogueUnsetMsg, st.Index, name)))
+			write(fmt.Sprintf("macaronic codec write %q %s \"$%s\"\n",
 				f, string(c[name]), name))
 		}
 	}

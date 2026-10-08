@@ -17,6 +17,8 @@ macaronic 是一个类编译的 **CLI 构建工具**：把单个混用多种编�
 - 每变量一个二进制 state 文件（脚本内自洽 ABI，见
   `docs/architecture.md` §10）
 - 顺序执行；失败即停并保留现场（`failure.json`）
+- 注入的读写失败一律响亮：声明的写若在运行时未赋值、或 list 读取失败，
+  都以固定文案中止该 stage，不退化成空值（见 `docs/architecture.md` §12）
 - 语言无关引擎接口，内置注册表
 
 ## 安装

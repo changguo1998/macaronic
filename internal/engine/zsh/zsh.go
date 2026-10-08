@@ -43,6 +43,17 @@ const genFile = "run.sh"
 // into. The name is deliberately unlikely to collide with user code.
 const listItemVar = "__macaronic_item"
 
+// Injected failure messages. Every dialect emits the same text so one
+// symptom reads the same everywhere (docs/architecture.md §12).
+const (
+	listReadMsg      = "macaronic: stage %d: cannot read contract variable %q (%s)"
+	epilogueUnsetMsg = "macaronic: stage %d: contract variable %q is unset at epilogue"
+)
+
+// scratchName is the per-stage scratch file one list prologue reads
+// through; stageDir is rebuilt on every build.
+func scratchName(name string) string { return ".prologue-" + name + ".tmp" }
+
 // Engine is the zsh backend.
 type Engine struct{}
 
@@ -288,9 +299,22 @@ func (Engine) Emit(st *ir.Stage, c ir.Contract, stageDir, stateDir string,
 			// zsh has no mapfile: read NUL-separated elements one at a
 			// time and append them. Both the path and the type are
 			// quoted (see the nomatch note in the package comment).
+			// Process substitution would hide a read-list failure (the
+			// array silently ends up empty, exit code stays 0), so the
+			// output goes through a stage-private scratch file whose
+			// exit status is checked.
+			tmp := filepath.Join(stageDir, scratchName(name))
+			write(fmt.Sprintf("if ! macaronic codec read-list %q %q > %q; then\n",
+				f, string(c[name]), tmp))
+			write(fmt.Sprintf("  rm -f %q\n", tmp))
+			write(fmt.Sprintf("  echo '%s' >&2\n",
+				fmt.Sprintf(listReadMsg, st.Index, name, c[name])))
+			write("  exit 1\n")
+			write("fi\n")
 			write(fmt.Sprintf("%s=()\n", name))
-			write(fmt.Sprintf("while IFS= read -r -d '' %s; do %s+=(\"$%s\"); done < <(macaronic codec read-list %q %q)\n",
-				listItemVar, name, listItemVar, f, string(c[name])))
+			write(fmt.Sprintf("while IFS= read -r -d '' %s; do %s+=(\"$%s\"); done < %q\n",
+				listItemVar, name, listItemVar, tmp))
+			write(fmt.Sprintf("rm -f %q\n", tmp))
 		} else {
 			write(fmt.Sprintf("%s=$(macaronic codec read %q %q)\n",
 				name, f, string(c[name])))
@@ -319,7 +343,11 @@ func (Engine) Emit(st *ir.Stage, c ir.Contract, stageDir, stateDir string,
 			write(fmt.Sprintf("macaronic codec write-list %q %q \"${%s[@]}\"\n",
 				f, string(c[name]), name))
 		} else {
-			write(fmt.Sprintf("macaronic codec write %q %q \"${%s-}\"\n",
+			// A declared write the body never assigned is an error, as
+			// in every dialect (M20): the message is the shared one.
+			write(fmt.Sprintf("(( ${+%s} )) || { echo '%s' >&2; exit 1; }\n",
+				name, fmt.Sprintf(epilogueUnsetMsg, st.Index, name)))
+			write(fmt.Sprintf("macaronic codec write %q %q \"$%s\"\n",
 				f, string(c[name]), name))
 		}
 	}

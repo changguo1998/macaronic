@@ -26,7 +26,8 @@ macaronic 是一个类编译的 **CLI 构建工具**：把单个混用多种编�
   Go 块需 Go 工具链。Windows 不在范围。
 - **运行时预检**：引擎可实现 `RuntimeChecker` 声明所需命令，`check` /
   `build` / `run` 在分析阶段探测缺失并 fail-fast，避免「check 通过但
-  实际跑不了」。
+  实际跑不了」。六种内置块语言全部实现（M20 起含 `python3` 与 `go`；
+  go 声明的是 Emit 编译所用的工具链，而非 RunCommand 执行的产物）。
 
 ### 块语言能力矩阵
 
@@ -326,6 +327,10 @@ type Engine interface {
 
 各语言职责：
 
+- **注入失败一律响亮**（M20）：`codec` 读失败的注入代码不得退化成空值。
+  list prologue 不再走进程替换，而是把 `read-list` 输出重定向到 stage
+  私有临时文件并检查退出码（bash / zsh）；标量 epilogue 在变量未赋值时
+  以固定文案中止；四方言共用同一句消息，见 §12。
 - **shell 方言（bash / sh / zsh / csh）**：无类型，以契约类型为准读写
   转换。shell 不能安全持有任意二进制（含 NUL 字节），因此注入的读写
   **调用 codec helper**（§10），不承诺纯 shell 解析二进制。方言差异：
@@ -421,16 +426,21 @@ macaronic <script>   # 等价于 macaronic run <script>
     行号（`-x` 只回显命令文本，手册亦无该能力），故无法回映到 `.mac`
     行号，失败以 stage 级信息加原始 stderr 呈现。**静态**诊断（如 list
     拒绝）行号仍然精确，因为那来自分析期 span 而非解释器。
-  - **`csh` 无 `${name-}` 默认算子**：epilogue 写一个块内从未赋值的变量
-    会响亮报 `Undefined variable.`，而 bash 写空串。差异是刻意的（响亮
-    优于静默），代价是跨方言行为不严格一致。
+  - **未赋值标量在四方言下一致响亮**（M20）：某个块声明了写却在运行时
+    没有赋值时，所有方言都中止并输出同一条消息
+    `macaronic: stage N: contract variable "x" is unset at epilogue`。
+    此前 csh 报 tcsh 自己的 `Undefined variable.`，而 bash 系的
+    `"${name-}"` 会把 `str` **静默写成空串**、把 `int` 变成 codec 的
+    `invalid syntax`（不含变量名）。
   - **`zsh` 默认 `nomatch`**：注入代码已引用 state 路径与类型；用户块内
     若自行书写未引用的 `[]` 通配，在 `<(...)` 内会静默失败。
   - 只写不读的数组在 zsh 下由 `(( ${+name} )) || name=()` 守卫定义为空
     数组，与 bash 的 0 参数行为持平；该守卫是为消除方言间不一致而加的。
-  - prologue 的 `codec read-list` 失败在**所有**方言下都会静默得到空
-    列表（进程替换/命令替换的失败不改变外层退出码）。该行为自 bash
-    实现起即存在，本阶段未改变。
+  - prologue 的 `codec read-list` 失败（M20 起**响亮**）：bash / zsh 改为
+    经 stage 私有临时文件读取并检查退出码，失败即输出
+    `macaronic: stage N: cannot read contract variable "x" (type)` 并
+    `exit 1`。此前进程替换会吞掉失败，数组静默变空且退出码仍为 0。
+    临时文件写在 stage 目录内，随每次 build 重建。
   - `csh` 的 state 路径若含单引号（病态路径）会破坏单引号引用。
   - 固定 `<脚本名>.run/` 目录存在并发运行竞争，以 fail-fast
     排他锁规避。

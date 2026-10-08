@@ -34,7 +34,8 @@
     替换，改为「重定向到 stage 私有临时文件 → 检查退出码 → 从文件读入 →
     删除临时文件」；失败时以含 stage 与变量名的错误报出并 `exit 1`。
   - **未赋值标量行为统一**：Bourne 系（bash / sh / zsh）epilogue 由
-    `"${name-}"` 改为 `"${name?…}"`；csh 增加显式 `if ( ! $?name )` 守卫。
+    `"${name-}"` 改为写入前的存在性检查 `[ -n "${name+x}" ]`；csh 增加显式
+    `if ( ! $?name )` 守卫。
     四种方言在「声明了写、运行时未赋值」时给出同一句 macaronic 级错误（含
     stage 与变量名），不再出现 `str` 静默写空、也不再只报 codec 的
     `invalid syntax`。

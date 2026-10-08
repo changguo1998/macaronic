@@ -52,6 +52,12 @@ import (
 // RunCommand invokes and that source-map entries reference.
 const genFile = "run.csh"
 
+// epilogueUnsetMsg is the shared injected failure message: every
+// dialect emits the same text so one symptom reads the same everywhere
+// (docs/architecture.md §12). csh has no list support, so it needs only
+// the scalar one.
+const epilogueUnsetMsg = "macaronic: stage %d: contract variable %q is unset at epilogue"
+
 // Engine is the C shell backend.
 type Engine struct{}
 
@@ -268,12 +274,18 @@ func (Engine) Emit(st *ir.Stage, c ir.Contract, stageDir, stateDir string,
 	}
 
 	// Epilogue: persist contract variables. csh has no ${name-}
-	// default-operator, so a write target the body never assigned is a
-	// loud `Undefined variable.` under `tcsh -e` instead of bash's
-	// silent empty string. That difference is deliberate and documented
-	// in docs/architecture.md §12.
+	// default-operator, so a write target the body never assigned used
+	// to die inside tcsh with `Undefined variable.`; the explicit guard
+	// reports the shared M20 message instead (same wording as the
+	// Bourne dialects). `> /dev/stderr` is the tcsh-compatible way to
+	// reach stderr: `>&` means "both streams" in csh and fails here.
 	for _, name := range sortedUnion(writes) {
 		f := filepath.Join(stateDir, stateFileName(name, c[name]))
+		write(fmt.Sprintf("if ( ! $?%s ) then\n", name))
+		write(fmt.Sprintf("  echo '%s' > /dev/stderr\n",
+			fmt.Sprintf(epilogueUnsetMsg, st.Index, name)))
+		write("  exit 1\n")
+		write("endif\n")
 		write(fmt.Sprintf("macaronic codec write '%s' '%s' \"$%s\"\n",
 			f, string(c[name]), name))
 	}

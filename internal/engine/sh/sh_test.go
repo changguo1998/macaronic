@@ -140,8 +140,12 @@ func TestEmitScalarPlumbing(t *testing.T) {
 		"#!/bin/sh\n",
 		"set -eu\n",
 		`count=$(macaronic codec read "` + stateDir + `/count.macint" int)`,
-		`macaronic codec write "` + stateDir + `/count.macint" int "${count-}"`,
-		`macaronic codec write "` + stateDir + `/msg.macstr" str "${msg-}"`,
+		// M20: a declared write the body never assigned aborts with the
+		// shared message instead of silently writing an empty value.
+		`[ -n "${count+x}" ] || { echo 'macaronic: stage 1: contract variable "count" is unset at epilogue' >&2; exit 1; }`,
+		`macaronic codec write "` + stateDir + `/count.macint" int "$count"`,
+		`[ -n "${msg+x}" ] || { echo 'macaronic: stage 1: contract variable "msg" is unset at epilogue' >&2; exit 1; }`,
+		`macaronic codec write "` + stateDir + `/msg.macstr" str "$msg"`,
 		"count=$(( $count + 1 ))\n",
 		"msg=hello\n",
 	} {
