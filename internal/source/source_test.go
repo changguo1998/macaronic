@@ -96,3 +96,23 @@ func TestEmptyAndTrailingBlocks(t *testing.T) {
 		t.Errorf("stage3 = %+v", stages[2])
 	}
 }
+
+// TestSplitAcceptsEveryDialect pins the allowedLangs whitelist for the
+// shell dialects added in M17-M19. A dialect missing here is rejected
+// before the analyzer ever sees it, so this is the parse-side half of
+// "the language is usable"; internal/engine covers the runtime half
+// (RunCommand argv[0] matches RequiredCommands).
+func TestSplitAcceptsEveryDialect(t *testing.T) {
+	for _, lang := range []string{"bash", "sh", "zsh", "csh", "python", "go"} {
+		src := "#!mac\n[contract]\ncount = \"int\"\n\n#!" + lang + "\ncount=1\n"
+		_, stages, err := Split("t.mac", lineString(src))
+		if err != nil {
+			t.Errorf("%s: Split() = %v, want accepted", lang, err)
+			continue
+		}
+		if len(stages) != 1 || stages[0].Lang != lang {
+			t.Errorf("%s: stages = %+v, want one stage with Lang %q",
+				lang, stages, lang)
+		}
+	}
+}
