@@ -16,6 +16,7 @@ const headMarker = "#!mac"
 // milestones (M6-M8).
 var allowedLangs = map[string]bool{
 	"bash":   true,
+	"sh":     true,
 	"python": true,
 	"go":     true,
 }

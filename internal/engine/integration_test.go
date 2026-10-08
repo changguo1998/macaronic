@@ -17,6 +17,7 @@ import (
 	"github.com/changguo1998/macaronic/internal/engine/bash"
 	"github.com/changguo1998/macaronic/internal/engine/golang"
 	"github.com/changguo1998/macaronic/internal/engine/python"
+	"github.com/changguo1998/macaronic/internal/engine/sh"
 	"github.com/changguo1998/macaronic/internal/ir"
 )
 
@@ -203,7 +204,7 @@ func runStage(t *testing.T, e interface {
 // RunCommand actually invokes, so the M17 preflight cannot drift from
 // what run.sh really executes.
 func TestRuntimeCommandsMatchRunCommand(t *testing.T) {
-	for _, eng := range []engine.Engine{bash.Engine{}, golang.Engine{}, python.Engine{}} {
+	for _, eng := range []engine.Engine{bash.Engine{}, sh.Engine{}, golang.Engine{}, python.Engine{}} {
 		rc, ok := eng.(engine.RuntimeChecker)
 		if !ok {
 			continue
@@ -221,6 +222,80 @@ func TestRuntimeCommandsMatchRunCommand(t *testing.T) {
 		if req[0] != argv[0] {
 			t.Errorf("%s: RequiredCommands[0] = %q, RunCommand argv[0] = %q",
 				eng.Name(), req[0], argv[0])
+		}
+	}
+}
+
+// TestCrossDialectBashShFlow runs the four scalar types through
+// bash → sh → bash and verifies the final values through the shared
+// codec ABI, proving the two dialects interoperate despite different
+// interpreters (and that sh carries no bash-only syntax into run.sh).
+func TestCrossDialectBashShFlow(t *testing.T) {
+	for _, cmd := range []string{"bash", "sh"} {
+		if _, err := exec.LookPath(cmd); err != nil {
+			t.Skipf("%s not available", cmd)
+		}
+	}
+	binDir := t.TempDir()
+	bin := filepath.Join(binDir, "macaronic")
+	if out, err := exec.Command("go", "build", "-o", bin,
+		repoRoot(t)+"/cmd/macaronic").CombinedOutput(); err != nil {
+		t.Fatalf("go build: %v\n%s", err, out)
+	}
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	root := t.TempDir()
+	// The codec helper writes into state/; the pipeline creates it in
+	// emit.WS.Create, so the test must provide it too.
+	if err := os.MkdirAll(filepath.Join(root, "state"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	contract := ir.Contract{
+		"count": ir.Int, "price": ir.Float, "flag": ir.Bool, "msg": ir.Str,
+	}
+
+	st1 := &ir.Stage{Index: 1, Lang: "bash", StartLine: 5, EndLine: 8, Body: []string{
+		"count=40",
+		"price=1.25",
+		"flag=true",
+		`msg="from bash"`,
+	}}
+	runStage(t, bash.Engine{}, st1, root, contract, "1")
+
+	st2 := &ir.Stage{Index: 2, Lang: "sh", StartLine: 12, EndLine: 15, Body: []string{
+		"count=$(( count + 2 ))",
+		"price=$price",
+		"flag=false",
+		`msg="$msg + sh"`,
+	}}
+	runStage(t, sh.Engine{}, st2, root, contract, "2")
+
+	st3 := &ir.Stage{Index: 3, Lang: "bash", StartLine: 20, EndLine: 21, Body: []string{
+		`msg="$msg + bash"`,
+	}}
+	runStage(t, bash.Engine{}, st3, root, contract, "3")
+
+	stateDir := filepath.Join(root, "state")
+	for _, tc := range []struct {
+		file string
+		typ  ir.BasicType
+		want any
+	}{
+		{"count.macint", ir.Int, int64(42)},
+		{"price.macfloat", ir.Float, 1.25},
+		{"flag.macbool", ir.Bool, false},
+		{"msg.macstr", ir.Str, "from bash + sh + bash"},
+	} {
+		data, err := os.ReadFile(filepath.Join(stateDir, tc.file))
+		if err != nil {
+			t.Fatalf("read %s: %v", tc.file, err)
+		}
+		got, err := codec.Read(bytes.NewReader(data), tc.typ)
+		if err != nil {
+			t.Fatalf("codec read %s: %v", tc.file, err)
+		}
+		if !reflect.DeepEqual(got, tc.want) {
+			t.Errorf("%s = %#v, want %#v", tc.file, got, tc.want)
 		}
 	}
 }

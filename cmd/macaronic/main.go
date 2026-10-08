@@ -11,10 +11,12 @@ import (
 	"github.com/changguo1998/macaronic/internal/engine/bash"
 	"github.com/changguo1998/macaronic/internal/engine/golang"
 	"github.com/changguo1998/macaronic/internal/engine/python"
+	"github.com/changguo1998/macaronic/internal/engine/sh"
 )
 
 func main() {
 	engine.Register(bash.Engine{})
+	engine.Register(sh.Engine{})
 	engine.Register(python.Engine{})
 	engine.Register(golang.Engine{})
 	os.Exit(cli.Run(os.Args[1:], os.Stdout, os.Stderr))
