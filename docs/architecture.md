@@ -17,16 +17,17 @@ macaronic 是一个类编译的 **CLI 构建工具**：把单个混用多种编�
 - 块标记 `#!lang`；`#!mac` head 块声明跨块变量契约
   （TOML `[contract]`）
 - 基本类型：`int` / `float` / `bool` / `str`
-- 块语言：shell 方言 `bash` / `sh` / `zsh` / `csh`，另加 `python`、`go`
+- 块语言：shell 方言 `bash` / `sh` / `zsh` / `csh`，另加 `python`、`go`、
+  `node`
 - 传输介质：每变量一个文件（二进制，脚本内自洽）
 - 顺序执行（并行推迟）
 - **运行环境**：Unix-like OS；shell 方言各需对应解释器（`#!bash` 需
   Bash、`#!sh` 需 POSIX sh、`#!zsh` 需 zsh、`#!csh` 需 **tcsh**，
   因 `-e`/exit-on-error 只有 tcsh 提供）；Python 块需 Python 3 运行时；
-  Go 块需 Go 工具链。Windows 不在范围。
+  Go 块需 Go 工具链；Node 块需 Node.js（≥ 18）。Windows 不在范围。
 - **运行时预检**：引擎可实现 `RuntimeChecker` 声明所需命令，`check` /
   `build` / `run` 在分析阶段探测缺失并 fail-fast，避免「check 通过但
-  实际跑不了」。六种内置块语言全部实现（M20 起含 `python3` 与 `go`；
+  实际跑不了」。七种内置块语言全部实现（M20 起含 `python3` 与 `go`；
   go 声明的是 Emit 编译所用的工具链，而非 RunCommand 执行的产物）。
 
 ### 块语言能力矩阵
@@ -39,6 +40,7 @@ macaronic 是一个类编译的 **CLI 构建工具**：把单个混用多种编�
 | `csh` | `tcsh -e` | 支持 | **不支持**（NUL 流按空白切分） | **否** |
 | `python` | `python3` | 支持 | 支持 | 是 |
 | `go` | `go` | 支持 | 支持 | 是 |
+| `node` | `node` | 支持 | 支持 | 是 |
 
 数组下标语义随方言：bash 从 0 起、zsh 从 1 起。macaronic 不归一，
 保持语言原生语义——注入代码只用与下标无关的 `"${name[@]}"` 与
@@ -226,7 +228,7 @@ internal/analyze/        语言无关的推断框架：符号表、类型集合�
 internal/plan/           ExecutionPlan：顺序执行计划（MVP）
 internal/codec/          二进制编码（脚本内 ABI，§10）
 internal/engine/         Engine 接口 + bash / sh / zsh / csh /
-                         python / golang 实现（含报错解析）
+                         python / golang / node 实现（含报错解析）
 internal/emit/           注入读写、落盘、run.sh、source-map 生成
 internal/runner/         子进程调度、退出码、错误回映
 internal/sourcemap/      源映射查询（生成行 → .mac 行）
@@ -341,6 +343,11 @@ type Engine interface {
   （`set name = value`、`@ name`、反引号命令替换）。
 - **python**：契约变量须带类型注解（缺注解 = check 报错）；
   prologue 读文件赋值、epilogue 写回文件，读写走 codec。
+- **node**：用户块是 CommonJS 顶层语句；engine 内嵌 Buffer 版 codec，
+  不调用 CLI helper。`int` 以 JS `number` 呈现、经 `BigInt` 中转读写，
+  非整数写入报错；产物固定命名 `run.cjs`，因为 `.js` 在带
+  `"type": "module"` 的目录下会被按 ESM 解析（实测）。动态语言无需类型
+  注解，类型以契约为准（同 shell 方言口径）。
 - **go**：用户块是**纯语句**（statement-only）。engine 负责
   `package main` + `func main` 包裹与类型声明，块内容放入 main 体；
   含 `go build` 步骤。生成 wrapper **只 import macaronic 的
@@ -392,7 +399,7 @@ macaronic <script>   # 等价于 macaronic run <script>
     元素写入数组；字符串元素拒绝 NUL
   生成的 bash / zsh list prologue/epilogue 使用 NUL 分隔读取和 argv
   写入（zsh 侧路径与类型显式引用）；
-  Python/Go 引擎直接内嵌同一 codec。
+  Python/Go/Node 引擎直接内嵌同一 codec。
 
 ## 11. 错误模型与源映射
 
@@ -444,4 +451,12 @@ macaronic <script>   # 等价于 macaronic run <script>
   - `csh` 的 state 路径若含单引号（病态路径）会破坏单引号引用。
   - 固定 `<脚本名>.run/` 目录存在并发运行竞争，以 fail-fast
     排他锁规避。
+  - **`node` 的 `int` 有 2^53 上限**：JS 数字是双精度浮点，超过 2^53 的
+    整数值经 `Number` 往返会丢精度（实测 `Number(9007199254740993n)` 得
+    `9007199254740992`）。需要更大整数时请自行用 `str` 传递或改用 Go 块。
+  - **`node` 块是 CommonJS**：产物名为 `run.cjs`，块内可用 `require`，
+    不能用 `import`（可用 `await import()` 绕过）；这样即使用户工程根目录
+    的 `package.json` 声明 `"type": "module"` 也不会失败（实测）。
+  - `node` 引擎不调用 `macaronic codec`，因此不需要 macaronic 在 `PATH`
+    中即可运行 node 块（`node` 本身仍需在 `PATH` 中，见 §1 运行时预检）。
   - 对象、struct、嵌套列表等更复杂的复合类型仍需用户手工拆分为基本类型或一维数组。

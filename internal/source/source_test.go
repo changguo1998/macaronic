@@ -97,13 +97,14 @@ func TestEmptyAndTrailingBlocks(t *testing.T) {
 	}
 }
 
-// TestSplitAcceptsEveryDialect pins the allowedLangs whitelist for the
-// shell dialects added in M17-M19. A dialect missing here is rejected
+// TestSplitAcceptsEveryDialect pins the allowedLangs whitelist for every
+// language with a registered engine (shell dialects from M17-M19, node
+// from M22). A language missing here is rejected
 // before the analyzer ever sees it, so this is the parse-side half of
 // "the language is usable"; internal/engine covers the runtime half
 // (RunCommand argv[0] matches RequiredCommands).
 func TestSplitAcceptsEveryDialect(t *testing.T) {
-	for _, lang := range []string{"bash", "sh", "zsh", "csh", "python", "go"} {
+	for _, lang := range []string{"bash", "sh", "zsh", "csh", "python", "go", "node"} {
 		src := "#!mac\n[contract]\ncount = \"int\"\n\n#!" + lang + "\ncount=1\n"
 		_, stages, err := Split("t.mac", lineString(src))
 		if err != nil {

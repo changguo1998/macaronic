@@ -11,9 +11,8 @@ import (
 // headMarker is the marker of the head (contract) block.
 const headMarker = "#!mac"
 
-// allowedLangs are block languages known in M2; unknown markers are
-// reported as errors. Engines are glued to these names in later
-// milestones (M6-M8).
+// allowedLangs are the block languages with a registered engine;
+// unknown markers are reported as errors.
 var allowedLangs = map[string]bool{
 	"bash":   true,
 	"sh":     true,
@@ -21,6 +20,7 @@ var allowedLangs = map[string]bool{
 	"csh":    true,
 	"python": true,
 	"go":     true,
+	"node":   true,
 }
 
 // Split scans raw source lines and returns the head block body (the

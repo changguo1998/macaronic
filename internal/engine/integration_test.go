@@ -18,6 +18,7 @@ import (
 	"github.com/changguo1998/macaronic/internal/engine/bash"
 	"github.com/changguo1998/macaronic/internal/engine/csh"
 	"github.com/changguo1998/macaronic/internal/engine/golang"
+	"github.com/changguo1998/macaronic/internal/engine/node"
 	"github.com/changguo1998/macaronic/internal/engine/python"
 	"github.com/changguo1998/macaronic/internal/engine/sh"
 	"github.com/changguo1998/macaronic/internal/engine/zsh"
@@ -202,6 +203,104 @@ func runStage(t *testing.T, e interface {
 	return out.String()
 }
 
+// TestCrossEngineBashNodePython runs a real pipeline through three
+// engines that use three different codec implementations: bash through
+// the CLI helper, node through its embedded Buffer codec, python
+// through struct. The final state proves the layouts agree, including
+// a str[] element with a space.
+func TestCrossEngineBashNodePython(t *testing.T) {
+	for _, cmd := range []string{"bash", "node", "python3", "go"} {
+		if _, err := exec.LookPath(cmd); err != nil {
+			t.Skipf("%s not available", cmd)
+		}
+	}
+	binDir := t.TempDir()
+	bin := filepath.Join(binDir, "macaronic")
+	if out, err := exec.Command("go", "build", "-o", bin,
+		repoRoot(t)+"/cmd/macaronic").CombinedOutput(); err != nil {
+		t.Fatalf("go build: %v\n%s", err, out)
+	}
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	root := t.TempDir()
+	stateDir := filepath.Join(root, "state")
+	if err := os.MkdirAll(stateDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	contract := ir.Contract{
+		"count": ir.Int, "msg": ir.Str, "values": ir.BasicType("int[]"),
+	}
+
+	runStage(t, bash.Engine{}, &ir.Stage{Index: 1, Lang: "bash", StartLine: 1, Body: []string{
+		"count=7",
+		`msg="from bash"`,
+		"values=(1 2)",
+	}}, root, contract, "1")
+
+	// node reads bash's state, mutates and writes it back.
+	runStage(t, node.Engine{}, &ir.Stage{Index: 2, Lang: "node", StartLine: 6, Body: []string{
+		`msg = msg + " + node"`,
+		"count++",
+		"values.push(3)",
+	}}, root, contract, "2")
+
+	stored := map[string]any{
+		"count.macint":    int64(8),
+		"msg.macstr":      "from bash + node",
+		"values.macint[]": []int64{1, 2, 3},
+	}
+	for file, want := range stored {
+		raw, err := os.ReadFile(filepath.Join(stateDir, file))
+		if err != nil {
+			t.Fatalf("state %s: %v", file, err)
+		}
+		got, err := codec.Read(bytes.NewReader(raw), typeOfStateFile(t, file, contract))
+		if err != nil {
+			t.Fatalf("decode %s: %v", file, err)
+		}
+		switch w := want.(type) {
+		case []int64:
+			g, ok := got.([]int64)
+			if !ok || len(g) != len(w) {
+				t.Fatalf("%s = %#v, want %#v", file, got, want)
+			}
+			for i := range w {
+				if g[i] != w[i] {
+					t.Fatalf("%s = %#v, want %#v", file, got, want)
+				}
+			}
+		default:
+			if got != want {
+				t.Fatalf("%s = %#v, want %#v", file, got, want)
+			}
+		}
+	}
+
+	// python prints the final values, proving it reads node's output.
+	out := runStage(t, python.Engine{}, &ir.Stage{Index: 3, Lang: "python", StartLine: 12, Body: []string{
+		"count: int",
+		"msg: str",
+		"values: list[int]",
+		`print("count=%d msg=%s values=%s" % (count, msg, ",".join(str(v) for v in values)))`,
+	}}, root, contract, "3")
+	want := "count=8 msg=from bash + node values=1,2,3\n"
+	if out != want {
+		t.Errorf("python stage output = %q, want %q", out, want)
+	}
+}
+
+// typeOfStateFile maps a state file name back to its contract type.
+func typeOfStateFile(t *testing.T, file string, c ir.Contract) ir.BasicType {
+	t.Helper()
+	for name, typ := range c {
+		if file == name+".mac"+string(typ) {
+			return typ
+		}
+	}
+	t.Fatalf("no contract type for state file %s", file)
+	return ""
+}
+
 // TestRuntimeCommandsMatchRunCommand pins T17.2: for every engine that
 // implements RuntimeChecker, RequiredCommands[0] must be the executable
 // RunCommand actually invokes, so the M17 preflight cannot drift from
@@ -211,7 +310,7 @@ func runStage(t *testing.T, e interface {
 // the compiler, so its declared command is the toolchain used during
 // Emit. TestRuntimeCommandsDeclared pins those requirements instead.
 func TestRuntimeCommandsMatchRunCommand(t *testing.T) {
-	for _, eng := range []engine.Engine{bash.Engine{}, sh.Engine{}, zsh.Engine{}, csh.Engine{}, golang.Engine{}, python.Engine{}} {
+	for _, eng := range []engine.Engine{bash.Engine{}, sh.Engine{}, zsh.Engine{}, csh.Engine{}, golang.Engine{}, python.Engine{}, node.Engine{}} {
 		rc, ok := eng.(engine.RuntimeChecker)
 		if !ok {
 			continue
@@ -247,8 +346,9 @@ func TestRuntimeCommandsDeclared(t *testing.T) {
 		"csh":    {"tcsh"},
 		"python": {"python3"},
 		"go":     {"go"},
+		"node":   {"node"},
 	}
-	for _, eng := range []engine.Engine{bash.Engine{}, sh.Engine{}, zsh.Engine{}, csh.Engine{}, golang.Engine{}, python.Engine{}} {
+	for _, eng := range []engine.Engine{bash.Engine{}, sh.Engine{}, zsh.Engine{}, csh.Engine{}, golang.Engine{}, python.Engine{}, node.Engine{}} {
 		rc, ok := eng.(engine.RuntimeChecker)
 		if !ok {
 			t.Errorf("%s: does not implement engine.RuntimeChecker", eng.Name())

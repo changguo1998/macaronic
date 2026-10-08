@@ -11,7 +11,8 @@ macaronic 是一个类编译的 **CLI 构建工具**：把单个混用多种编�
 - 基本类型：`int` / `float` / `bool` / `str`；支持一维数组
   `int[]` / `float[]` / `bool[]` / `str[]`
   `string[]` 是兼容别名，规范化为 `str[]`
-- 块语言：shell 方言 `bash` / `sh` / `zsh` / `csh`，另加 `python` / `go`
+- 块语言：shell 方言 `bash` / `sh` / `zsh` / `csh`，另加 `python` / `go` /
+  `node`
   （能力矩阵见 `docs/architecture.md` §1；`sh` 与 `csh` 不支持一维数组，
   引用数组类型的契约变量会在 check 阶段报错）
 - 每变量一个二进制 state 文件（脚本内自洽 ABI，见
@@ -29,8 +30,9 @@ go build -o /usr/local/bin/macaronic ./cmd/macaronic
 
 依赖：Go 工具链 ≥ 1.22；`#!bash` 需 Bash、`#!sh` 需 POSIX sh、
 `#!zsh` 需 zsh、`#!csh` 需 **tcsh**（失败即停依赖其 `-e`）、`#!python`
-块需 Python 3、`#!go` 块需相同 Go 工具链。macaronic 自身需在 `PATH`
-中（生成的脚本通过 `macaronic codec` 读写状态文件）。
+块需 Python 3、`#!go` 块需相同 Go 工具链、`#!node` 块需 Node.js。shell
+方言块的注入代码通过 `macaronic codec` 读写状态文件，因此 macaronic 自身
+需在 `PATH` 中；python / go / node 块内嵌同一 codec，无此要求。
 
 缺失上述解释器时 `check` / `build` / `run` 会 fail-fast 报错（含方言名
 与所查命令），不会出现「check 通过但实际跑不了」。
