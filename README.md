@@ -87,6 +87,13 @@ gofmt -l .               # 格式
 markdownlint-cli2        # markdown 检查（自备，配置见 .markdownlint-cli2.jsonc）
 ```
 
+若 `go test` 报 `~/.cache/go-build/...: read-only file system`（构建缓存目录不
+可写，例如在受限沙箱里），把缓存指到可写位置即可：
+
+```sh
+GOCACHE=/tmp/macaronic-gocache go test ./...
+```
+
 语言引擎实现 `internal/engine` 下的 `engine.Engine` 接口并用
 `engine.Register` 注册（见 `cmd/macaronic/main.go`）。
 
