@@ -18,6 +18,7 @@ import (
 	"github.com/changguo1998/macaronic/internal/engine/golang"
 	"github.com/changguo1998/macaronic/internal/engine/python"
 	"github.com/changguo1998/macaronic/internal/engine/sh"
+	"github.com/changguo1998/macaronic/internal/engine/zsh"
 	"github.com/changguo1998/macaronic/internal/ir"
 )
 
@@ -204,7 +205,7 @@ func runStage(t *testing.T, e interface {
 // RunCommand actually invokes, so the M17 preflight cannot drift from
 // what run.sh really executes.
 func TestRuntimeCommandsMatchRunCommand(t *testing.T) {
-	for _, eng := range []engine.Engine{bash.Engine{}, sh.Engine{}, golang.Engine{}, python.Engine{}} {
+	for _, eng := range []engine.Engine{bash.Engine{}, sh.Engine{}, zsh.Engine{}, golang.Engine{}, python.Engine{}} {
 		rc, ok := eng.(engine.RuntimeChecker)
 		if !ok {
 			continue
@@ -285,6 +286,73 @@ func TestCrossDialectBashShFlow(t *testing.T) {
 		{"price.macfloat", ir.Float, 1.25},
 		{"flag.macbool", ir.Bool, false},
 		{"msg.macstr", ir.Str, "from bash + sh + bash"},
+	} {
+		data, err := os.ReadFile(filepath.Join(stateDir, tc.file))
+		if err != nil {
+			t.Fatalf("read %s: %v", tc.file, err)
+		}
+		got, err := codec.Read(bytes.NewReader(data), tc.typ)
+		if err != nil {
+			t.Fatalf("codec read %s: %v", tc.file, err)
+		}
+		if !reflect.DeepEqual(got, tc.want) {
+			t.Errorf("%s = %#v, want %#v", tc.file, got, tc.want)
+		}
+	}
+}
+
+// TestCrossDialectBashZshListFlow runs one-dimensional lists through
+// bash → zsh and verifies the final values through the shared codec
+// ABI. This is the cross-dialect proof that the two array
+// implementations interchange even though zsh has no mapfile and
+// indexes arrays from 1 (the test body uses an append, which is
+// index-agnostic).
+func TestCrossDialectBashZshListFlow(t *testing.T) {
+	for _, cmd := range []string{"bash", "zsh"} {
+		if _, err := exec.LookPath(cmd); err != nil {
+			t.Skipf("%s not available", cmd)
+		}
+	}
+	binDir := t.TempDir()
+	bin := filepath.Join(binDir, "macaronic")
+	if out, err := exec.Command("go", "build", "-o", bin,
+		repoRoot(t)+"/cmd/macaronic").CombinedOutput(); err != nil {
+		t.Fatalf("go build: %v\n%s", err, out)
+	}
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "state"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	contract := ir.Contract{
+		"values": ir.ListOf(ir.Int),
+		"words":  ir.ListOf(ir.Str),
+	}
+
+	// bash creates both lists; one str element contains a space, which
+	// is what a naive NUL/whitespace bridge would silently split.
+	st1 := &ir.Stage{Index: 1, Lang: "bash", StartLine: 5, EndLine: 6, Body: []string{
+		"values=(1 2 3)",
+		`words=("alpha" "b b")`,
+	}}
+	runStage(t, bash.Engine{}, st1, root, contract, "1")
+
+	// zsh reads them back and appends.
+	st2 := &ir.Stage{Index: 2, Lang: "zsh", StartLine: 12, EndLine: 14, Body: []string{
+		"values+=(4)",
+		`words+=("c c")`,
+	}}
+	runStage(t, zsh.Engine{}, st2, root, contract, "2")
+
+	stateDir := filepath.Join(root, "state")
+	for _, tc := range []struct {
+		file string
+		typ  ir.BasicType
+		want any
+	}{
+		{"values.macint[]", ir.ListOf(ir.Int), []int64{1, 2, 3, 4}},
+		{"words.macstr[]", ir.ListOf(ir.Str), []string{"alpha", "b b", "c c"}},
 	} {
 		data, err := os.ReadFile(filepath.Join(stateDir, tc.file))
 		if err != nil {

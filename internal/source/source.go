@@ -17,6 +17,7 @@ const headMarker = "#!mac"
 var allowedLangs = map[string]bool{
 	"bash":   true,
 	"sh":     true,
+	"zsh":    true,
 	"python": true,
 	"go":     true,
 }
