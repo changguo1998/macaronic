@@ -64,8 +64,11 @@ macaronic codec write-list state/values.macint[] int[] 1 2 3
 ## 文档
 
 - [`docs/architecture.md`](docs/architecture.md)：规范性架构设计
+- [`docs/development-plan.md`](docs/development-plan.md)：里程碑规划
+  （阶段 5，M20–M21）
+- [`docs/tasks.md`](docs/tasks.md)：详细任务清单与进度（阶段 5）
 - 阶段 4 归档：[计划](docs/archive/development-plan-phase4.md) /
-  [任务](docs/archive/tasks-phase4.md)（M17–M19 已完成，阶段 5 待规划）
+  [任务](docs/archive/tasks-phase4.md)（M17–M19）
 - 阶段 3 归档：[计划](docs/archive/development-plan-phase3.md) /
   [任务](docs/archive/tasks-phase3.md)
 - 阶段 2 归档：[计划](docs/archive/development-plan-phase2.md) /
