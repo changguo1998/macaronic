@@ -43,6 +43,30 @@ primes under 1000: count=168 sum=76127 first=2 last=997
 primes.mac: ok
 ```
 
+## 四方言 shell 混合（bash → sh → zsh → csh）
+
+`mixed-shells.mac`：同一份契约数据在四个 shell 方言间流转——bash 建初值，
+sh 与 zsh 做标量加工（zsh 另追加数组元素），csh 做算术与字符串拼接，最后
+bash 汇总输出。
+
+注意 `sh` 与 `csh` 不支持一维数组契约类型（引用即 check 报错），所以数组
+只出现在 bash / zsh 阶段；`csh` 需 **tcsh**，因为失败即停依赖其 `-e`。
+
+```sh
+macaronic run mixed-shells.mac
+```
+
+预期输出：
+
+```text
+mixed-shells.mac: running 5 stage(s)
+final: count=30 msg=[bash seed | sh +5 | zsh | csh] squares=[1 4 9 16]
+mixed-shells.mac: ok
+```
+
+缺任一方言解释器时 `check` / `build` / `run` 都会 fail-fast 报错，而不是
+等到运行时才失败。
+
 ## 异常路径用例
 
 - `read-before-write.mac` — 未写先读：`macaronic check` 应报错。

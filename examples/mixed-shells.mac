@@ -1,0 +1,25 @@
+#!mac
+[contract]
+count = "int"
+msg = "str"
+squares = "int[]"
+
+#!bash
+count=10
+msg="bash seed"
+squares=(1 4 9)
+
+#!sh
+count=$(( count + 5 ))
+msg="$msg | sh +5"
+
+#!zsh
+msg="$msg | zsh"
+squares+=(16)
+
+#!csh
+set msg = "$msg | csh"
+@ count = $count * 2
+
+#!bash
+echo "final: count=$count msg=[$msg] squares=[${squares[*]}]"

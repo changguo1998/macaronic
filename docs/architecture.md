@@ -17,11 +17,31 @@ macaronic 是一个类编译的 **CLI 构建工具**：把单个混用多种编�
 - 块标记 `#!lang`；`#!mac` head 块声明跨块变量契约
   （TOML `[contract]`）
 - 基本类型：`int` / `float` / `bool` / `str`
-- 首批块语言：`bash` + `python` + `go`
+- 块语言：shell 方言 `bash` / `sh` / `zsh` / `csh`，另加 `python`、`go`
 - 传输介质：每变量一个文件（二进制，脚本内自洽）
 - 顺序执行（并行推迟）
-- **运行环境**：Unix-like OS；`#!bash` 即 Bash；Python 块需
-  Python 3 运行时；Go 块需 Go 工具链。Windows 不在范围。
+- **运行环境**：Unix-like OS；shell 方言各需对应解释器（`#!bash` 需
+  Bash、`#!sh` 需 POSIX sh、`#!zsh` 需 zsh、`#!csh` 需 **tcsh**，
+  因 `-e`/exit-on-error 只有 tcsh 提供）；Python 块需 Python 3 运行时；
+  Go 块需 Go 工具链。Windows 不在范围。
+- **运行时预检**：引擎可实现 `RuntimeChecker` 声明所需命令，`check` /
+  `build` / `run` 在分析阶段探测缺失并 fail-fast，避免「check 通过但
+  实际跑不了」。
+
+### 块语言能力矩阵
+
+| 方言 | 解释器 | 标量 | 一维数组 | 运行时诊断带行号 |
+| --- | --- | --- | --- | --- |
+| `bash` | `bash` | 支持 | 支持（`mapfile`） | 是 |
+| `sh` | `sh` | 支持 | **不支持**（POSIX 无数组） | 是 |
+| `zsh` | `zsh` | 支持 | 支持（`read -d ''` 循环） | 是 |
+| `csh` | `tcsh -e` | 支持 | **不支持**（NUL 流按空白切分） | **否** |
+| `python` | `python3` | 支持 | 支持 | 是 |
+| `go` | `go` | 支持 | 支持 | 是 |
+
+数组下标语义随方言：bash 从 0 起、zsh 从 1 起。macaronic 不归一，
+保持语言原生语义——注入代码只用与下标无关的 `"${name[@]}"` 与
+`name+=(...)` 形式。
 
 ### 非目标
 
@@ -78,7 +98,12 @@ go 块读 `total` 并打印。各块的读写代码由 macaronic 自动注入，
 - Python 块内契约变量**必须带类型注解**（`count: int`、
   `total: float`）；检测到引用契约变量却缺注解 → **check 阶段报错**
   （不是警告，也不静默不注入）。
-- 无类型块（bash）以契约表声明的类型为准读写转换。
+- 无类型块（bash / sh / zsh / csh）以契约表声明的类型为准读写转换。
+- **一维数组仅在具备数组能力的块可用**：`sh` 或 `csh` 块引用 list 类型
+  的契约变量 → **check 阶段报错**（不是警告，也不静默不注入）。POSIX sh
+  无数组语法与 process substitution；csh 无法承载 NUL 分隔的数组流（按
+  空白切分会静默错位）。理由与「Python 缺注解」同类：分类上做不到，
+  宁可拒绝不可静默。
 
 ## 3. 编译流水线
 
@@ -128,7 +153,7 @@ type VarSet map[string]bool
 
 type Stage struct {
     Index     int    // 阶段序号，从 1 起
-    Lang      string // bash / python / go
+    Lang      string // bash / sh / zsh / csh / python / go
     Source    []string
     StartLine int    // 块首在 .mac 中的行号
     ReadSet   VarSet
@@ -199,8 +224,8 @@ internal/analyze/        语言无关的推断框架：符号表、类型集合�
                          读写推断、依赖校验
 internal/plan/           ExecutionPlan：顺序执行计划（MVP）
 internal/codec/          二进制编码（脚本内 ABI，§10）
-internal/engine/         Engine 接口 + bash / python / golang
-                         实现（含报错解析）
+internal/engine/         Engine 接口 + bash / sh / zsh / csh /
+                         python / golang 实现（含报错解析）
 internal/emit/           注入读写、落盘、run.sh、source-map 生成
 internal/runner/         子进程调度、退出码、错误回映
 internal/sourcemap/      源映射查询（生成行 → .mac 行）
@@ -279,7 +304,7 @@ run.sh 失败报告：
 
 ```go
 type Engine interface {
-    Name() string // bash / python / go
+    Name() string // bash / sh / zsh / csh / python / go
 
     // Analyze 做块内类型传播，返回本块读/写的契约变量集合。
     Analyze(st *ir.Stage, c ir.Contract) (readSet, writeSet ir.VarSet,
@@ -301,9 +326,14 @@ type Engine interface {
 
 各语言职责：
 
-- **bash**：无类型，以契约类型为准读写转换。Bash 不能安全持有
-  任意二进制（含 NUL 字节），因此 bash 块注入的读写**调用
-  codec helper**（§10），不承诺纯 Bash 直接解析二进制。
+- **shell 方言（bash / sh / zsh / csh）**：无类型，以契约类型为准读写
+  转换。shell 不能安全持有任意二进制（含 NUL 字节），因此注入的读写
+  **调用 codec helper**（§10），不承诺纯 shell 解析二进制。方言差异：
+  `sh` / `csh` 无数组能力（list 报错拒绝）；`zsh` 用
+  `while IFS= read -r -d ''` 循环代替 `mapfile`，且注入代码必须引用
+  state 路径与类型（默认 `nomatch` 下未引用的 `[]` 会失败）；`csh`
+  由 `tcsh -e` 提供失败即停，惯用写法与 Bourne 系不同
+  （`set name = value`、`@ name`、反引号命令替换）。
 - **python**：契约变量须带类型注解（缺注解 = check 报错）；
   prologue 读文件赋值、epilogue 写回文件，读写走 codec。
 - **go**：用户块是**纯语句**（statement-only）。engine 负责
@@ -341,7 +371,7 @@ macaronic <script>   # 等价于 macaronic run <script>
 - **state 文件名契约**：`<var>.mac<type>`（如 `count.macint`、
   `msg.macstr`、`values.macint[]`）。**所有引擎统一**此命名，保证跨语言
   state 互通。类型后缀 = canonical 契约类型名。
-- **codec helper**：bash 块的注入读写不直接解析二进制，而调用
+- **codec helper**：shell 方言块的注入读写不直接解析二进制，而调用
   macaronic 的隐藏子命令 `codec`：
   - `macaronic codec read <state-file> <type>` → 输出人类可读值
   - `macaronic codec write <state-file> <type> <value>` → 写标量二进制
@@ -349,7 +379,8 @@ macaronic <script>   # 等价于 macaronic run <script>
     输出
   - `macaronic codec write-list <state-file> <list-type> <value>...` → 按 argv
     元素写入数组；字符串元素拒绝 NUL
-  生成的 bash list prologue/epilogue 使用 NUL 分隔读取和 argv 写入；
+  生成的 bash / zsh list prologue/epilogue 使用 NUL 分隔读取和 argv
+  写入（zsh 侧路径与类型显式引用）；
   Python/Go 引擎直接内嵌同一 codec。
 
 ## 11. 错误模型与源映射
@@ -378,8 +409,23 @@ macaronic <script>   # 等价于 macaronic run <script>
   - 推断失败则不注入，可能导致运行时错误（未定义名）；阶段 2 的
     check 会对「源码出现但未推断」发 warning，提示读可能未注入；
     macaronic 的检查仍是「轻量静态检查」，**不承诺完全编译期安全**。
-  - bash 块的二进制处理依赖 `macaronic codec` helper，纯 Bash
+  - shell 方言块的二进制处理依赖 `macaronic codec` helper，纯 shell
     表达力有限。
+  - **`csh` 的运行时诊断没有行号**：csh 对任何错误类别都不输出文件名与
+    行号（`-x` 只回显命令文本，手册亦无该能力），故无法回映到 `.mac`
+    行号，失败以 stage 级信息加原始 stderr 呈现。**静态**诊断（如 list
+    拒绝）行号仍然精确，因为那来自分析期 span 而非解释器。
+  - **`csh` 无 `${name-}` 默认算子**：epilogue 写一个块内从未赋值的变量
+    会响亮报 `Undefined variable.`，而 bash 写空串。差异是刻意的（响亮
+    优于静默），代价是跨方言行为不严格一致。
+  - **`zsh` 默认 `nomatch`**：注入代码已引用 state 路径与类型；用户块内
+    若自行书写未引用的 `[]` 通配，在 `<(...)` 内会静默失败。
+  - 只写不读的数组在 zsh 下由 `(( ${+name} )) || name=()` 守卫定义为空
+    数组，与 bash 的 0 参数行为持平；该守卫是为消除方言间不一致而加的。
+  - prologue 的 `codec read-list` 失败在**所有**方言下都会静默得到空
+    列表（进程替换/命令替换的失败不改变外层退出码）。该行为自 bash
+    实现起即存在，本阶段未改变。
+  - `csh` 的 state 路径若含单引号（病态路径）会破坏单引号引用。
   - 固定 `<脚本名>.run/` 目录存在并发运行竞争，以 fail-fast
     排他锁规避。
   - 对象、struct、嵌套列表等更复杂的复合类型仍需用户手工拆分为基本类型或一维数组。
