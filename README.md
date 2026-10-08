@@ -36,11 +36,15 @@ go build -o /usr/local/bin/macaronic ./cmd/macaronic
 ## 快速开始
 
 ```sh
+macaronic parse hello.mac   # 解析并打印块列表与契约
 macaronic check hello.mac   # 静态检查
 macaronic build hello.mac   # 生成产物目录，保留 state/
 macaronic run  hello.mac    # 编译、清空 state、按序执行
 macaronic       hello.mac   # 等价于 run
 ```
+
+四个子命令就是流水线的四步（`parse → check → build → run`）：每个命令
+跑完自己那一步就停，`run` 是整条流水线加执行。
 
 产物布局（`hello.mac.run/`）：每个块一个 `stageN/`，共享
 `state/`，另含 `run.sh`、`sourcemap.json`、`failure.json`（失败时）。

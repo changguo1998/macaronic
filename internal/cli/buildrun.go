@@ -23,8 +23,10 @@ import (
 	"github.com/changguo1998/macaronic/internal/sourcemap"
 )
 
-// load reads and validates one .mac file.
-func loadMac(path string) (*ir.Program, error) {
+// stageParse is pipeline stage 1 (architecture §3): read the .mac file,
+// split it into blocks and parse the head-block contract into Program
+// IR. parse / check / build / run all start here.
+func stageParse(path string) (*ir.Program, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -41,10 +43,11 @@ func loadMac(path string) (*ir.Program, error) {
 	return &ir.Program{Path: path, Contract: c, Stages: stages}, nil
 }
 
-// runBuild emits every stage into the workspace. clearState decides
-// whether state/ is wiped (run=yes) or preserved (build=no). Returns
-// workspace, per-stage argv, and the filled builder for back-mapping.
-func runBuild(p *ir.Program, clearState bool) (*emit.WS, [][]string, *sourcemap.Builder, error) {
+// stageBuild is pipeline stage 3 (architecture §3): emit every stage
+// into the workspace. clearState decides whether state/ is wiped
+// (run=yes) or preserved (build=no). Returns workspace, per-stage argv,
+// and the filled builder for back-mapping.
+func stageBuild(p *ir.Program, clearState bool) (*emit.WS, [][]string, *sourcemap.Builder, error) {
 	// Absolute paths: engines embed stateDir/into emitted scripts,
 	// and runner chdirs to stageDir, so relative roots would break.
 	dir, err := filepath.Abs(filepath.Dir(p.Path))
@@ -123,17 +126,18 @@ func acquireLock(path string) (func(), error) {
 	return lock.LockFile(path + ".run.lock")
 }
 
-// checkOK runs the analyzers; on issues, prints and returns false.
-func checkOK(p *ir.Program, stdout io.Writer) bool {
+// stageCheck is pipeline stage 2 (architecture §3): run the analyzers,
+// print the report, and report whether the program may be built.
+func stageCheck(p *ir.Program, stdout io.Writer) bool {
 	rep := (analyze.Analyzer{Engines: engine.Get}).Run(p)
 	rep.Print(stdout)
 	return rep.OK()
 }
 
-// runStages executes per-stage argv, mapping a failing stage's
-// diagnostics to source lines (T9.3) before returning. langs[i] is
-// the language of stage i+1.
-func runStages(ws *emit.WS, langs []string, cmds [][]string, stdout io.Writer) (*runner.StageResult, string, error) {
+// stageRun is pipeline stage 4 (architecture §3): execute per-stage
+// argv, mapping a failing stage's diagnostics to source lines (T9.3)
+// before returning. langs[i] is the language of stage i+1.
+func stageRun(ws *emit.WS, langs []string, cmds [][]string, stdout io.Writer) (*runner.StageResult, string, error) {
 	res := runner.Run(cmds, ws.Stages, func(out []byte) {
 		if stdout != nil {
 			stdout.Write(out)
@@ -215,15 +219,15 @@ func runBuildCmd(path string, stdout, stderr io.Writer) int {
 	}
 	defer release()
 
-	p, err := loadMac(path)
+	p, err := stageParse(path)
 	if err != nil {
 		fmt.Fprintf(stderr, "macaronic build: %v\n", err)
 		return exitFail
 	}
-	if !checkOK(p, stdout) {
+	if !stageCheck(p, stdout) {
 		return exitFail
 	}
-	if _, _, _, err := runBuild(p, false); err != nil {
+	if _, _, _, err := stageBuild(p, false); err != nil {
 		fmt.Fprintf(stderr, "macaronic build: %v\n", err)
 		return exitFail
 	}
@@ -244,15 +248,15 @@ func runCmd(path string, stdout, stderr io.Writer) int {
 	}
 	defer release()
 
-	p, err := loadMac(path)
+	p, err := stageParse(path)
 	if err != nil {
 		fmt.Fprintf(stderr, "macaronic run: %v\n", err)
 		return exitFail
 	}
-	if !checkOK(p, stderr) {
+	if !stageCheck(p, stderr) {
 		return exitFail
 	}
-	ws, cmds, _, err := runBuild(p, true)
+	ws, cmds, _, err := stageBuild(p, true)
 	if err != nil {
 		fmt.Fprintf(stderr, "macaronic run: %v\n", err)
 		return exitFail
@@ -264,7 +268,7 @@ func runCmd(path string, stdout, stderr io.Writer) int {
 		langs[i] = p.Stages[i].Lang
 	}
 	fmt.Fprintf(stdout, "%s: running %d stage(s)\n", filepath.Base(path), len(p.Stages))
-	fr, backmapped, err := runStages(ws, langs, cmds, stdout)
+	fr, backmapped, err := stageRun(ws, langs, cmds, stdout)
 	if fr == nil {
 		fmt.Fprintf(stdout, "%s: ok\n", filepath.Base(path))
 		return exitOK

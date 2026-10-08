@@ -348,10 +348,16 @@ macaronic <parse|check|build|run> <script>
 macaronic <script>   # 等价于 macaronic run <script>
 ```
 
-- `parse`：源文件 → 块列表 + 契约（打印 IR 摘要）
+- `parse`：源文件 → 块列表 + 契约；摘要固定为文本四段：`path`、
+  `stages`（块数）、`contract`（按变量名排序的 `名 类型`）、每块一行
+  `stage N: <lang> (line L)`，L 为块标记所在行。解析失败只报错、不打印
+  半截摘要。
 - `check`：契约比对 / 类型传播 / 依赖检查（只检查，不生成）
 - `build`：块落盘 + 注入读写 + run.sh + source-map
 - `run`：**每次**执行 `parse → check → build → 清空 state → 执行 run.sh`（确定性全量重跑）
+- 每个子命令只跑流水线的一个前缀：`parse` = 阶段 1，`check` = 1–2，
+  `build` = 1–3，`run` = 1–4（加执行）。实现对应 `stageParse` /
+  `stageCheck` / `stageBuild` / `stageRun` 四个共用函数（`internal/cli`）。
 
 ## 10. 二进制 codec
 

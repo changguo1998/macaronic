@@ -132,7 +132,7 @@ func TestRunStagesReportsPersistenceError(t *testing.T) {
 		Root:   root,
 		Stages: []string{filepath.Join(root, "missing-stage")},
 	}
-	fr, _, err := runStages(ws, []string{"bash"}, [][]string{{"true"}}, nil)
+	fr, _, err := stageRun(ws, []string{"bash"}, [][]string{{"true"}}, nil)
 	if fr == nil || err == nil {
 		t.Fatalf("fr=%+v err=%v, want process and persistence failures", fr, err)
 	}

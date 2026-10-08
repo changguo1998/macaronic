@@ -7,14 +7,10 @@ package cli
 import (
 	"fmt"
 	"io"
-	"os"
+	"sort"
 	"strings"
 
-	"github.com/changguo1998/macaronic/internal/analyze"
-	"github.com/changguo1998/macaronic/internal/contract"
-	"github.com/changguo1998/macaronic/internal/engine"
 	"github.com/changguo1998/macaronic/internal/ir"
-	"github.com/changguo1998/macaronic/internal/source"
 )
 
 // subcommand names registered in M1.
@@ -33,52 +29,66 @@ const (
 	exitUsage = 2
 )
 
-// proposalHelp marks placeholder subcommands until M2..M9 wire
-// real implementations in.
-const notImplementedMsg = "未实现：后续里程碑接入（M2/M3/M4/M9）"
+// subcommands lists the script-taking subcommands in pipeline order
+// (architecture §3): each runs stageParse plus the stages up to and
+// including its own. The table is the single source of truth for
+// dispatch, the top-level help and per-subcommand help.
+var subcommands = []struct {
+	name string
+	desc string
+	run  func(path string, stdout, stderr io.Writer) int
+}{
+	{cmdParse, "解析并输出 IR", runParse},
+	{cmdCheck, "静态检查并输出检查报告", runCheck},
+	{cmdBuild, "生成产物目录", runBuildCmd},
+	{cmdRun, "编译、构建并执行", runCmd},
+}
 
-const topUsage = `macaronic：混合多语言脚本编译运行工具
+// subcommand looks name up in the pipeline table.
+func subcommand(name string) (func(string, io.Writer, io.Writer) int, string, bool) {
+	for _, s := range subcommands {
+		if s.name == name {
+			return s.run, s.desc, true
+		}
+	}
+	return nil, "", false
+}
 
-用法：
-  macaronic <脚本.mac>           编译并运行（等价 run）
-  macaronic <子命令> [参数] ...
-
-子命令：
-  parse    解析并输出 IR
-  check    静态检查并输出检查报告
-  build    生成产物目录
-  run      编译、构建并执行
-
-全局参数：
-  -h, --help  打印帮助
-`
-
-const stubUsage = `%s：功能未实现
-
-用法：macaronic %s <脚本.mac>
-`
+// topUsage renders the top-level help from the subcommand table, so the
+// listed commands cannot drift from the ones actually wired up.
+func topUsage() string {
+	var b strings.Builder
+	fmt.Fprint(&b, "macaronic：混合多语言脚本编译运行工具\n\n用法：\n"+
+		"  macaronic <脚本.mac>           编译并运行（等价 run）\n"+
+		"  macaronic <子命令> [参数] ...\n\n子命令：\n")
+	for _, s := range subcommands {
+		fmt.Fprintf(&b, "  %-8s %s\n", s.name, s.desc)
+	}
+	fmt.Fprint(&b, "\n全局参数：\n  -h, --help  打印帮助\n")
+	return b.String()
+}
 
 // Run executes the CLI and returns the process exit code.
 func Run(args []string, stdout, stderr io.Writer) int {
 	switch {
 	case len(args) == 0:
-		fmt.Fprint(stderr, topUsage)
+		fmt.Fprint(stderr, topUsage())
 		return exitUsage
 	case args[0] == "-h" || args[0] == "--help":
-		fmt.Fprint(stdout, topUsage)
+		fmt.Fprint(stdout, topUsage())
 		return exitOK
 	}
 
 	name := args[0]
-	switch name {
-	case cmdParse, cmdCheck, cmdBuild, cmdRun:
-		return runSub(name, args[1:], stdout, stderr)
-	case cmdCodec:
+	if name == cmdCodec {
 		return runCodec(args[1:], stdout, stderr)
+	}
+	if _, _, ok := subcommand(name); ok {
+		return runSub(name, args[1:], stdout, stderr)
 	}
 
 	if !looksLikeScript(name) {
-		fmt.Fprintf(stderr, "macaronic：未知子命令 %q\n\n%s", name, topUsage)
+		fmt.Fprintf(stderr, "macaronic：未知子命令 %q\n\n%s", name, topUsage())
 		return exitUsage
 	}
 	// Shorthand: macaronic <script> === macaronic run <script>.
@@ -86,11 +96,12 @@ func Run(args []string, stdout, stderr io.Writer) int {
 }
 
 // runSub validates positional args, handles -h/--help and forwards to
-// the subcommand driver.
+// the handler of one pipeline prefix.
 func runSub(name string, rest []string, stdout, stderr io.Writer) int {
+	run, desc, _ := subcommand(name)
 	for _, r := range rest {
 		if r == "-h" || r == "--help" {
-			fmt.Fprintf(stdout, stubUsage, name, name)
+			fmt.Fprintf(stdout, "%s：%s\n\n用法：macaronic %s <脚本.mac>\n", name, desc, name)
 			return exitOK
 		}
 	}
@@ -98,45 +109,58 @@ func runSub(name string, rest []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "macaronic：%s 恰需 1 个脚本参数，得到 %d 个\n", name, len(rest))
 		return exitUsage
 	}
-	switch name {
-	case cmdCheck:
-		return runCheck(rest[0], stdout, stderr)
-	case cmdBuild:
-		return runBuildCmd(rest[0], stdout, stderr)
-	case cmdRun:
-		return runCmd(rest[0], stdout, stderr)
-	}
-	fmt.Fprintf(stderr, "%s：%s\n", name, notImplementedMsg)
-	return exitFail
+	return run(rest[0], stdout, stderr)
 }
 
-// runCheck slices, parses and runs the analysis framework over one
-// script, printing the report. A non-zero exit reflects found issues.
+// runParse implements `macaronic parse <script>`: pipeline stage 1
+// only (architecture §3), printing the IR summary.
+func runParse(path string, stdout, stderr io.Writer) int {
+	p, err := stageParse(path)
+	if err != nil {
+		fmt.Fprintf(stderr, "macaronic parse: %v\n", err)
+		return exitFail
+	}
+	printParse(stdout, p)
+	return exitOK
+}
+
+// runCheck implements `macaronic check <script>`: pipeline prefix
+// parse + check. It writes no artifacts.
 func runCheck(path string, stdout, stderr io.Writer) int {
-	data, err := os.ReadFile(path)
+	p, err := stageParse(path)
 	if err != nil {
 		fmt.Fprintf(stderr, "macaronic check: %v\n", err)
 		return exitFail
 	}
-	lines := strings.Split(strings.TrimSuffix(string(data), "\n"), "\n")
-	head, stages, err := source.Split(path, lines)
-	if err != nil {
-		fmt.Fprintf(stderr, "macaronic check: %v\n", err)
+	if !stageCheck(p, stdout) {
 		return exitFail
 	}
-	c, err := contract.Parse(head)
-	if err != nil {
-		fmt.Fprintf(stderr, "macaronic check: %v\n", err)
-		return exitFail
+	return exitOK
+}
+
+// printParse renders the parse result: script path, block list (index,
+// language, line of the block marker) and the contract in deterministic
+// name order.
+func printParse(w io.Writer, p *ir.Program) {
+	fmt.Fprintf(w, "path: %s\n", p.Path)
+	fmt.Fprintf(w, "stages: %d\n", len(p.Stages))
+	names := make([]string, 0, len(p.Contract))
+	for name := range p.Contract {
+		names = append(names, name)
 	}
-	rep := (analyze.Analyzer{Engines: engine.Get}).Run(&ir.Program{
-		Path: path, Contract: c, Stages: stages,
-	})
-	rep.Print(stdout)
-	if rep.OK() {
-		return exitOK
+	sort.Strings(names)
+	if len(names) == 0 {
+		fmt.Fprint(w, "contract: (none)\n")
+	} else {
+		fmt.Fprint(w, "contract:\n")
+		for _, name := range names {
+			fmt.Fprintf(w, "  %s %s\n", name, p.Contract[name])
+		}
 	}
-	return exitFail
+	for i := range p.Stages {
+		st := &p.Stages[i]
+		fmt.Fprintf(w, "stage %d: %s (line %d)\n", st.Index, st.Lang, st.StartLine)
+	}
 }
 
 // looksLikeScript guesses whether an unknown first arg is meant as the
