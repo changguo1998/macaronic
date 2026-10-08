@@ -156,7 +156,7 @@ type VarSet map[string]bool
 
 type Stage struct {
     Index     int    // 阶段序号，从 1 起
-    Lang      string // bash / sh / zsh / csh / python / go
+    Lang      string // bash / sh / zsh / csh / python / go / node
     Source    []string
     StartLine int    // 块首在 .mac 中的行号
     ReadSet   VarSet
@@ -307,7 +307,7 @@ run.sh 失败报告：
 
 ```go
 type Engine interface {
-    Name() string // bash / sh / zsh / csh / python / go
+    Name() string // bash / sh / zsh / csh / python / go / node
 
     // Analyze 做块内类型传播，返回本块读/写的契约变量集合。
     Analyze(st *ir.Stage, c ir.Contract) (readSet, writeSet ir.VarSet,
