@@ -36,6 +36,13 @@ func (Engine) RequiredCommands() []string { return []string{"bash"} }
 // writeRe matches a Bash assignment at line start.
 var writeRe = regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_]*)=`)
 
+// appendRe matches a `name+=...` append at line start. An append reads
+// the existing value and writes the result back, so the variable is
+// both read and written. Without this case, `msg+=" x"` matched no
+// write rule at all: the prologue/epilogue were skipped and the
+// modification was dropped, with only the M12 warning hinting at it.
+var appendRe = regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_]*)\+=`)
+
 // rawRe matches $name (without braces).
 var rawRe = regexp.MustCompile(`\$([A-Za-z_][A-Za-z0-9_]*)`)
 
@@ -78,6 +85,15 @@ func (Engine) AnalyzeDetailed(st *ir.Stage, c ir.Contract) engine.Analysis {
 			name := line[m[2]:m[3]]
 			if _, ok := c[name]; ok {
 				a.Writes[name] = true
+				rememberSpan(a.WriteSpans, name, lineSpan(i, m[2], len(name)))
+			}
+		}
+		if m := appendRe.FindStringSubmatchIndex(line); len(m) > 0 {
+			name := line[m[2]:m[3]]
+			if _, ok := c[name]; ok {
+				a.Reads[name] = true
+				a.Writes[name] = true
+				rememberSpan(a.ReadSpans, name, lineSpan(i, m[2], len(name)))
 				rememberSpan(a.WriteSpans, name, lineSpan(i, m[2], len(name)))
 			}
 		}

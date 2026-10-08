@@ -351,3 +351,34 @@ func TestEmitBashListPlumbing(t *testing.T) {
 		t.Errorf("generated bash missing list bridge:\n%s", out)
 	}
 }
+
+// TestAnalyzeAppendIsReadAndWrite pins the += fix: an append reads the
+// existing value and writes the result back, so both injection sides
+// are required. Previously `msg+=" world"` matched no write rule, so
+// the append was dropped and only the M12 warning hinted at it.
+func TestAnalyzeAppendIsReadAndWrite(t *testing.T) {
+	st := testStage(`msg+=" world"`, "count+=1")
+	reads, writes, err := (Engine{}).Analyze(st, testContract)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"msg", "count"} {
+		if !reads[name] {
+			t.Errorf("%s not inferred as read; reads = %v", name, reads)
+		}
+		if !writes[name] {
+			t.Errorf("%s not inferred as write; writes = %v", name, writes)
+		}
+	}
+	// A plain assignment must still be write-only.
+	reads, writes, err = (Engine{}).Analyze(testStage("count=1"), testContract)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reads["count"] {
+		t.Errorf("plain assignment inferred a read; reads = %v", reads)
+	}
+	if !writes["count"] {
+		t.Errorf("plain assignment not inferred as write; writes = %v", writes)
+	}
+}
